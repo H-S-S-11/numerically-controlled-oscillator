@@ -46,7 +46,7 @@ class NCO_LUT(Elaboratable):
 
 if __name__ == "__main__":
 
-    dut = NCO_LUT()
+    dut = NCO_LUT(16, 16)
     sim = Simulator(dut)
     sim.add_clock(1e-7) #10MHz
 
