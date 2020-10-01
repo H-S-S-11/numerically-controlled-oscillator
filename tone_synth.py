@@ -1,10 +1,13 @@
+import os
+
 from nmigen import *
 from nmigen.back.pysim import *
+from nmigen.back.verilog import *
 
 from nco_lut import *
 from pwm import PWM
 
-class tone_synth(Elaboratable):
+class Tone_synth(Elaboratable):
     def __init__(self, tone_frequency=440, clk_frequency=50000000):
         self.pwm_o = Signal()
 
@@ -27,4 +30,9 @@ class tone_synth(Elaboratable):
         return m
 
 if __name__ == "__main__":
-    
+    path = "tone_synth_outputs"
+    if not os.path.exists(path):
+        os.makedirs(path)
+    tone = Tone_synth()
+    out = open("tone_synth_outputs/tone_synth.v", "w")
+    out.write(convert(tone, ports=[tone.pwm_o]))
