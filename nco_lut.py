@@ -12,7 +12,7 @@ def gen_lookup(entry, input_width, output_width):
     return output
 
 def calc_phi_inc(desired_freq, clock_freq):
-    max_inc = 2**31-1 #this would result in output frequency of fclk/2
+    max_inc = (2**31)-1 #this would result in output frequency of fclk/2
     ratio = desired_freq/(clock_freq/2)
     return int(ratio*max_inc)
 
