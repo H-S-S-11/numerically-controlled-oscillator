@@ -12,17 +12,22 @@ from nco_lut import *
 from pwm import PWM
 
 class Tone_synth(Elaboratable):
-    def __init__(self, tone_frequency=440, clk_frequency=50000000):
+    def __init__(self, tone_frequency=440, clk_frequency=50000000, resolution = 8, pwm_resolution=None):
         self.pwm_o = Pin(1, "o")
 
         self.phi_inc = calc_phi_inc(tone_frequency, clk_frequency)
 
+        self.resolution = resolution
+        if pwm_resolution==None:
+            self.pwm_resolution = resolution
+        else:
+            self.pwm_resolution = pwm_resolution
             
     def elaborate(self, platform):
         m = Module()
 
-        m.submodules.nco = self.nco = nco = NCO_LUT()
-        m.submodules.pwm = self.pwm = pwm = PWM()
+        m.submodules.nco = self.nco = nco = NCO_LUT(output_width= self.pwm_resolution, sin_input_width=self.resolution)
+        m.submodules.pwm = self.pwm = pwm = PWM(resolution = self.pwm_resolution)
     
     
         platform.add_resources([
@@ -46,7 +51,7 @@ class Tone_synth(Elaboratable):
 
 if __name__ == "__main__":
   
-    tone = Tone_synth()
+    tone = Tone_synth(resolution = 10, pwm_resolution=8)
 
     if sys.argv[1] == "convert":
         path = "tone_synth_outputs"
@@ -59,6 +64,4 @@ if __name__ == "__main__":
         DE4Platform().build(tone, do_program=False)
     elif sys.argv[1] == "program":
         DE4Platform().build(tone, do_program=True)
-
-
-    
+   
