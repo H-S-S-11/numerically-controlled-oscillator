@@ -23,7 +23,10 @@ def inst_pll(pll_file_name, domain, pll_module_name, freq, platform, m):
     ret.locked = Signal()
 
     m.domains += ClockDomain(domain)
-    m.d.comb += ClockSignal(domain=domain).eq(ret.pll_clk)
+    m.d.comb += [
+        ClockSignal(domain=domain).eq(ret.pll_clk),
+        ResetSignal(domain=domain).eq(~ret.locked),
+    ]
 
     with open(pll_file_name) as f:
         platform.add_file(pll_file_name, f)
@@ -34,7 +37,9 @@ def inst_pll(pll_file_name, domain, pll_module_name, freq, platform, m):
             pll_module_name,
 
             i_inclk0=platform.request("clk50", 1, dir="-"),
+            i_areset=ResetSignal(domain="sync"),
             o_c0=ret.pll_clk,
+            o_locked=ret.locked
         ))
 
     platform.add_clock_constraint(ret.pll_clk, freq)
@@ -53,14 +58,14 @@ class Tone_synth(Elaboratable):
         else:
             self.pwm_resolution = pwm_resolution
 
-    def __elab_build_pll200(self, m):
+    def __elab_build_pll600(self, m):
         return inst_pll("C:/intelFPGA/18.0/SIV_pll_600M/SIV_pll_600M.v", "clk600", "SIV_pll_600M", 600000000, self.platform, m)
             
     def elaborate(self, platform):
         self.platform = platform
         m = Module()
 
-        pll200 = self.__elab_build_pll200(m)
+        pll600 = self.__elab_build_pll600(m)
 
         m.submodules.nco = self.nco = nco \
             = DomainRenamer({"sync": "clk600"})(NCO_LUT(output_width= self.pwm_resolution, sin_input_width=self.resolution))
