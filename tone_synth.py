@@ -1,12 +1,12 @@
 import os
 import sys
 from nmigen import *
-from nmigen.back.pysim import *
+from nmigen.sim import *
 from nmigen.back.verilog import *
 from nmigen.build import *
 from nmigen.build.res import *
 from nmigen.lib.io import Pin
-from nmigen_boards.de4 import DE4Platform
+from nmigen_boards.ml505 import ML505Platform
 
 from nco_lut import *
 from pwm import PWM
@@ -29,15 +29,14 @@ class Tone_synth(Elaboratable):
         m.submodules.nco = self.nco = nco = NCO_LUT(output_width= self.pwm_resolution, sin_input_width=self.resolution)
         m.submodules.pwm = self.pwm = pwm = PWM(resolution = self.pwm_resolution)
     
-    
-        platform.add_resources([
-            Resource("pwm", 0,
-                Pins("1", conn=("gpio", 0), dir ="o" ), 
-                Attrs(io_standard="3.0-V PCI")
-                ),
-        ])
-
-        self.pwm_o = platform.request("pwm")
+        if(platform != None):
+            platform.add_resources([
+                Resource("pwm", 0,
+                    Pins("2", conn=("gpio", 0), dir ="o" ), 
+                    Attrs(IOSTANDARD="LVCMOS33")
+                    ),
+            ])
+            self.pwm_o = platform.request("pwm")
 
         m.d.comb += [
             nco.phi_inc_i.eq(self.phi_inc),
@@ -51,7 +50,7 @@ class Tone_synth(Elaboratable):
 
 if __name__ == "__main__":
   
-    tone = Tone_synth(resolution = 6, pwm_resolution=6)
+    tone = Tone_synth(resolution = 6, pwm_resolution=6, clk_frequency=100000000)
 
     if sys.argv[1] == "convert":
         path = "tone_synth_outputs"
@@ -61,7 +60,6 @@ if __name__ == "__main__":
         out.write(convert(tone, ports=[tone.pwm_o.o]))
 
     elif sys.argv[1] == "build":
-        DE4Platform().build(tone, do_program=False)
-    elif sys.argv[1] == "program":
-        DE4Platform().build(tone, do_program=True)
+        ML505Platform().build(tone, do_build=False, do_program=False).execute_local(run_script=False)
+    
    
