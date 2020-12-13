@@ -11,7 +11,7 @@ class AC97_Controller(Elaboratable):
     def __init__(self):
         #AC97 signals
         self.sdata_in = Pin(width=1, dir="i", xdr = 2)
-        self.sdata_out = Pin(width=1, dir="o", xdr = 2)
+        self.sdata_out = Pin(width=1, dir="o")
         self.sync_o = Pin(width=1, dir="o")
         self.reset_o = Pin(width=1, dir="o")
 
@@ -73,19 +73,25 @@ class AC97_Controller(Elaboratable):
 
         
 
-        
-
         m.d.comb += [
             self.sync_o.o.eq(0),
         ]
 
         bit_count = Signal(5)
-        m.d.bit_clk += bit_count.eq(bit_count-1)
+        shift_out = Signal(20)
+        m.d.bit_clk += [
+            bit_count.eq(bit_count-1),
+            shift_out.eq(shift_out << 1),
+            self.sdata_out.o.eq(shift_out[19]),
+        ]
 
         with m.FSM(domain="bit_clk") as ac97_if:
             with m.State("IO_CTRL"):
                 with m.If(~bit_count.any()):
-                    m.d.bit_clk += bit_count.eq(15)
+                    m.d.bit_clk += [
+                        bit_count.eq(15),
+                        shift_out.eq(0x90000),
+                    ]
                     m.next = "TAG"
             with m.State("TAG"):
                 m.d.comb += self.sync_o.o.eq(1)
@@ -106,7 +112,10 @@ class AC97_Controller(Elaboratable):
                     m.next = "CMD_DATA"
             with m.State("CMD_DATA"):
                 with m.If(~bit_count.any()):
-                    m.d.bit_clk += bit_count.eq(20)
+                    m.d.bit_clk += [
+                        bit_count.eq(20),
+                        shift_out.eq(dac_left_front_sync),
+                    ]
                     m.next = "L_FRONT"
             with m.State("L_FRONT"):
                 with m.If(~bit_count.any()):
