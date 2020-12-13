@@ -4,7 +4,7 @@ from nmigen.lib.cdc import *
 from nmigen.lib.io import *
 
 # AC97 is a 16 bit "Tag" followed by 12 20-bit data backets,
-# with the interface written to on rising edges of bit_clk,
+# with the interface written to on rising edges of audio_bit_clk,
 # and sampled on the falling edge
 
 class AC97_Controller(Elaboratable):
@@ -36,7 +36,6 @@ class AC97_Controller(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        self.bit_clk = bit_clk = ClockDomain(name="audio_bit_clk")
         
         dac_inputs_valid = Signal()
         dac_valid_ack_sync = Signal()
@@ -61,11 +60,11 @@ class AC97_Controller(Elaboratable):
             m.d.comb += self.dac_sample_written.eq(1)
             m.d.sync += dac_inputs_valid.eq(0)
 
-        #bit_clk domain
+        #audio_bit_clk domain
         dac_valid_ack = Signal()
         dac_inputs_valid_sync = Signal()
         m.submodules.dac_input_valid_2ff = FFSynchronizer(dac_inputs_valid,
-            dac_inputs_valid_sync, o_domain="bit_clk")
+            dac_inputs_valid_sync, o_domain="audio_bit_clk")
         m.submodules.dac_ack_2ff = FFSynchronizer(dac_valid_ack,
             dac_valid_ack_sync, o_domain="sync")
         dac_tag_sync = Signal(6)      
@@ -79,16 +78,16 @@ class AC97_Controller(Elaboratable):
 
         bit_count = Signal(5)
         shift_out = Signal(20)
-        m.d.bit_clk += [
+        m.d.audio_bit_clk += [
             bit_count.eq(bit_count-1),
             shift_out.eq(shift_out << 1),
             self.sdata_out.o.eq(shift_out[19]),
         ]
 
-        with m.FSM(domain="bit_clk") as ac97_if:
+        with m.FSM(domain="audio_bit_clk") as ac97_if:
             with m.State("IO_CTRL"):
                 with m.If(~bit_count.any()):
-                    m.d.bit_clk += [
+                    m.d.audio_bit_clk += [
                         bit_count.eq(15),
                         shift_out.eq(0x90000),
                     ]
@@ -96,62 +95,62 @@ class AC97_Controller(Elaboratable):
             with m.State("TAG"):
                 m.d.comb += self.sync_o.o.eq(1)
                 with m.If(~dac_valid_ack & dac_inputs_valid_sync):
-                    m.d.bit_clk += [
+                    m.d.audio_bit_clk += [
                         dac_valid_ack.eq(1),
                         dac_tag_sync.eq(dac_tag),
                         dac_left_front_sync.eq(dac_left_front)        
                     ]
                 with m.If(~bit_count.any()):
-                    m.d.bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(20)
                     m.next = "CMD_ADDR"
             with m.State("CMD_ADDR"):
                 with m.If(dac_valid_ack & ~dac_inputs_valid_sync):
-                    m.d.bit_clk += dac_valid_ack.eq(0)
+                    m.d.audio_bit_clk += dac_valid_ack.eq(0)
                 with m.If(~bit_count.any()):
-                    m.d.bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(20)
                     m.next = "CMD_DATA"
             with m.State("CMD_DATA"):
                 with m.If(~bit_count.any()):
-                    m.d.bit_clk += [
+                    m.d.audio_bit_clk += [
                         bit_count.eq(20),
                         shift_out.eq(dac_left_front_sync),
                     ]
                     m.next = "L_FRONT"
             with m.State("L_FRONT"):
                 with m.If(~bit_count.any()):
-                    m.d.bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(20)
                     m.next = "R_FRONT"
             with m.State("R_FRONT"):
                 with m.If(~bit_count.any()):
-                    m.d.bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(20)
                     m.next = "LINE_1"
             with m.State("LINE_1"):
                 with m.If(~bit_count.any()):
-                    m.d.bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(20)
                     m.next = "CENTER_MIC"
             with m.State("CENTER_MIC"):
                 with m.If(~bit_count.any()):
-                    m.d.bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(20)
                     m.next = "L_SURR"
             with m.State("L_SURR"):
                 with m.If(~bit_count.any()):
-                    m.d.bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(20)
                     m.next = "R_SURR"
             with m.State("R_SURR"):
                 with m.If(~bit_count.any()):
-                    m.d.bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(20)
                     m.next = "LFE"
             with m.State("LFE"):
                 with m.If(~bit_count.any()):
-                    m.d.bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(20)
                     m.next = "LINE_2"
             with m.State("LINE_2"):
                 with m.If(~bit_count.any()):
-                    m.d.bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(20)
                     m.next = "HSET"
             with m.State("HSET"):
                 with m.If(~bit_count.any()):
-                    m.d.bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(20)
                     m.next = "IO_CTRL"
             
 
@@ -161,7 +160,7 @@ class AC97_Controller(Elaboratable):
 
         adc_outputs_valid = Signal()
         adc_valid_ack = Signal()
-        m.d.bit_clk += adc_valid_ack.eq(0)
+        m.d.audio_bit_clk += adc_valid_ack.eq(0)
 
         return m
 
@@ -171,7 +170,7 @@ if __name__=="__main__":
     dut = AC97_Controller()
     sim = Simulator(dut)
     sim.add_clock(10e-9) #100MHz
-    sim.add_clock(81e-9, domain="bit_clk")
+    sim.add_clock(81e-9, domain="audio_bit_clk")
     
 
     def clock():

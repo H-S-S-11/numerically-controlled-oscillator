@@ -34,8 +34,10 @@ class Tone_synth(Elaboratable):
             ac97_if = platform.request("audio_codec")
             ac97.sdata_in = ac97_if.sdata_in
             ac97.sdata_out = ac97_if.sdata_out
-            ac97.sync_o = ac97_if.sync_o
-            ac97.reset_o = ac97_if.reset_o
+            ac97.sync_o = ac97_if.audio_sync
+            ac97.reset_o = ac97_if.flash_audio_reset_b
+
+            m.domains += ClockDomain(name="audio_bit_clk")
 
         m.d.comb += [
             nco.phi_inc_i.eq(self.phi_inc),
