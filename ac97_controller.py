@@ -84,12 +84,16 @@ class AC97_Controller(Elaboratable):
             self.sdata_out.o.eq(shift_out[19]),
         ]
 
+        command_select = Signal(2)
+        
+
         with m.FSM(domain="audio_bit_clk") as ac97_if:
             with m.State("IO_CTRL"):
                 with m.If(~bit_count.any()):
                     m.d.audio_bit_clk += [
                         bit_count.eq(15),
-                        shift_out.eq(0x90000),
+                        shift_out.eq(0xf9800),  #valid command address, command data, line out, l/r surround out
+                        command_select.eq(command_select + 1),
                     ]
                     m.next = "TAG"
             with m.State("TAG"):
@@ -102,12 +106,23 @@ class AC97_Controller(Elaboratable):
                     ]
                 with m.If(~bit_count.any()):
                     m.d.audio_bit_clk += bit_count.eq(20)
+                    #send a command. for the basics it will loop through master volume, line out, headphones
+                    with m.Switch(command_select):
+                        with m.Case(0):
+                            m.d.audio_bit_clk += shift_out.eq(0x02000)  #write to master volume
+                        with m.Case(1):
+                            m.d.audio_bit_clk += shift_out.eq(0x04000)  #write to headphones volume
+                        with m.Case(2):
+                            m.d.audio_bit_clk += shift_out.eq(0x18000)  #write to line out volume
+                        with m.Case(3):
+                            m.d.audio_bit_clk += shift_out.eq(0x02000)  #write to master volume (laziest way to avoid resetting)
                     m.next = "CMD_ADDR"
             with m.State("CMD_ADDR"):
                 with m.If(dac_valid_ack & ~dac_inputs_valid_sync):
                     m.d.audio_bit_clk += dac_valid_ack.eq(0)
                 with m.If(~bit_count.any()):
                     m.d.audio_bit_clk += bit_count.eq(20)
+                    # don't need specifics since writing zeroes to these registers should unmute the channels
                     m.next = "CMD_DATA"
             with m.State("CMD_DATA"):
                 with m.If(~bit_count.any()):
@@ -118,7 +133,10 @@ class AC97_Controller(Elaboratable):
                     m.next = "L_FRONT"
             with m.State("L_FRONT"):
                 with m.If(~bit_count.any()):
-                    m.d.audio_bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += [
+                        bit_count.eq(20),
+                        shift_out.eq(dac_left_front_sync),  #for now put the same data on all output channels
+                    ]
                     m.next = "R_FRONT"
             with m.State("R_FRONT"):
                 with m.If(~bit_count.any()):
@@ -130,11 +148,17 @@ class AC97_Controller(Elaboratable):
                     m.next = "CENTER_MIC"
             with m.State("CENTER_MIC"):
                 with m.If(~bit_count.any()):
-                    m.d.audio_bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += [
+                        bit_count.eq(20),
+                        shift_out.eq(dac_left_front_sync),
+                    ]
                     m.next = "L_SURR"
             with m.State("L_SURR"):
                 with m.If(~bit_count.any()):
-                    m.d.audio_bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += [
+                        bit_count.eq(20),
+                        shift_out.eq(dac_left_front_sync),
+                    ]
                     m.next = "R_SURR"
             with m.State("R_SURR"):
                 with m.If(~bit_count.any()):
