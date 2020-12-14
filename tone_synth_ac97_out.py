@@ -12,7 +12,7 @@ from nco_lut import *
 from ac97_controller import AC97_Controller
 
 class Tone_synth(Elaboratable):
-    def __init__(self, tone_frequency=440, clk_frequency=100000000, resolution = 16, pwm_resolution=None):
+    def __init__(self, tone_frequency=440, clk_frequency=100000000, resolution = 10, pwm_resolution=None):
         self.pwm_o = Pin(1, "o")
 
         self.phi_inc = calc_phi_inc(tone_frequency, clk_frequency)
@@ -37,11 +37,17 @@ class Tone_synth(Elaboratable):
             ac97.sync_o = ac97_if.audio_sync
             ac97.reset_o = ac97_if.flash_audio_reset_b
 
-            m.domains += ClockDomain(name="audio_bit_clk")
+            #Get the clock from the codec
+            m.domains.audio_bit_clk = ClockDomain()
+            audio_clk = platform.request("audio_bit_clk")
+            m.d.comb += ClockSignal("audio_bit_clk").eq(audio_clk)
+            
 
+        zero=Signal(10)
         m.d.comb += [
             nco.phi_inc_i.eq(self.phi_inc),
-            ac97.dac_left_front_i.eq(Cat(0b0000, nco.sine_wave_o)),        
+            ac97.dac_left_front_i.eq(Cat(zero, nco.sine_wave_o)),
+        
         ]
 
 
@@ -49,7 +55,7 @@ class Tone_synth(Elaboratable):
 
 if __name__ == "__main__":
   
-    tone = Tone_synth(resolution = 16, clk_frequency=100000000)
+    tone = Tone_synth(resolution = 10, clk_frequency=100000000)
 
     if sys.argv[1] == "convert":
         path = "tone_synth_outputs"
