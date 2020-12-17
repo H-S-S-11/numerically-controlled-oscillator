@@ -30,7 +30,7 @@ class AC97_Controller(Elaboratable):
         self.adc_tag = Signal(3)                #Indicates which slots are valid
         self.adc_left = Signal(20)              # slot 3
         self.adc_right = Signal(20)             # slot 4
-        self.adc_mic = Signal(20)               # slot 6
+        self.adc_out_valid = Signal()           # indicates the window in which  the adc_ outputs can be read
         
 
     def elaborate(self, platform):
@@ -78,17 +78,30 @@ class AC97_Controller(Elaboratable):
 
         bit_count = Signal(5)
         shift_out = Signal(20)
+        shift_in = Signal(20)
+   
         m.d.audio_bit_clk += [
             bit_count.eq(bit_count-1),
             shift_out.eq(shift_out << 1),
+            shift_in.eq(Cat(self.sdata_in.i1, shift_in[0:19])),
             self.sdata_out.o.eq(shift_out[19]),
         ]
 
         command_select = Signal(2)
+
+        #adc stuff
         
+        adc_outputs_valid = Signal()
+        adc_outputs_valid_sync = Signal()
+        m.submodules.adc_output_valid_2ff = FFSynchronizer(adc_outputs_valid,
+            adc_outputs_valid_sync, o_domain="sync")      
+
+        adc_pcm_l = Signal(20)
+        #interface
 
         with m.FSM(domain="audio_bit_clk") as ac97_if:
             with m.State("IO_CTRL"):
+                m.d.audio_bit_clk += adc_outputs_valid.eq(1)
                 with m.If(~bit_count.any()):
                     m.d.audio_bit_clk += [
                         bit_count.eq(15),
@@ -98,6 +111,7 @@ class AC97_Controller(Elaboratable):
                     m.next = "TAG"
             with m.State("TAG"):
                 m.d.comb += self.sync_o.o.eq(1)
+                m.d.audio_bit_clk += adc_outputs_valid.eq(0)
                 with m.If(~dac_valid_ack & dac_inputs_valid_sync):
                     m.d.audio_bit_clk += [
                         dac_valid_ack.eq(1),
@@ -115,7 +129,7 @@ class AC97_Controller(Elaboratable):
                         with m.Case(2):
                             m.d.audio_bit_clk += shift_out.eq(0x18000)  #write to line out volume
                         with m.Case(3):
-                            m.d.audio_bit_clk += shift_out.eq(0x02000)  #write to master volume (laziest way to avoid resetting)
+                            m.d.audio_bit_clk += shift_out.eq(0x0e000)  #write to mic in volume
                     m.next = "CMD_ADDR"
             with m.State("CMD_ADDR"):
                 with m.If(dac_valid_ack & ~dac_inputs_valid_sync):
@@ -136,6 +150,7 @@ class AC97_Controller(Elaboratable):
                     m.d.audio_bit_clk += [
                         bit_count.eq(20),
                         shift_out.eq(dac_left_front_sync),  #for now put the same data on all output channels
+                        adc_pcm_l.eq(Cat(self.sdata_in.i1, shift_in[0:19])),
                     ]
                     m.next = "R_FRONT"
             with m.State("R_FRONT"):
@@ -182,9 +197,7 @@ class AC97_Controller(Elaboratable):
         
 
 
-        adc_outputs_valid = Signal()
-        adc_valid_ack = Signal()
-        m.d.audio_bit_clk += adc_valid_ack.eq(0)
+        
 
         return m
 
@@ -204,8 +217,16 @@ if __name__=="__main__":
     def data_input():
         yield dut.dac_left_front_i.eq(10)
 
+    def adc_input():
+        while True:
+            yield dut.sdata_in.i1.eq(1)
+            yield
+            yield dut.sdata_in.i1.eq(0)
+            yield
+
     sim.add_sync_process(clock)
     sim.add_sync_process(data_input, domain="sync")
+    sim.add_sync_process(adc_input, domain="audio_bit_clk")
 
     with sim.write_vcd("ac97_waves.vcd"):
         sim.run_until(1e-4, run_passive=True)
