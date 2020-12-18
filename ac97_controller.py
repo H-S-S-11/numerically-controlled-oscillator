@@ -31,7 +31,7 @@ class AC97_Controller(Elaboratable):
         self.adc_left = Signal(20)              # slot 3
         self.adc_right = Signal(20)             # slot 4
         self.adc_out_valid = Signal()           # indicates the window in which  the adc_ outputs can be read
-        
+        self.adc_sample_received = Signal()
 
     def elaborate(self, platform):
         m = Module()
@@ -94,9 +94,25 @@ class AC97_Controller(Elaboratable):
         adc_outputs_valid = Signal()
         adc_outputs_valid_sync = Signal()
         m.submodules.adc_output_valid_2ff = FFSynchronizer(adc_outputs_valid,
-            adc_outputs_valid_sync, o_domain="sync")      
+            adc_outputs_valid_sync, o_domain="sync")   
+        adc_valid_ack = Signal()
+        adc_valid_ack_sync = Signal()
+        m.submodules.adc_valid_ack_2ff = FFSynchronizer(adc_valid_ack,
+            adc_valid_ack_sync, o_domain="audio_bit_clk")
+        adc_pcm_l_sync = Signal(20)
 
         adc_pcm_l = Signal(20)
+
+        m.d.comb += self.adc_sample_received.eq(0)
+        
+        with m.If(~adc_valid_ack & adc_outputs_valid_sync):
+            m.d.comb += self.adc_sample_received.eq(1)
+            m.d.sync += [
+                adc_valid_ack.eq(1),
+                adc_pcm_l_sync.eq(adc_pcm_l)        
+            ]
+        with m.If(~adc_outputs_valid_sync):
+            m.d.sync += adc_valid_ack.eq(0)
         #interface
 
         with m.FSM(domain="audio_bit_clk") as ac97_if:
@@ -111,7 +127,8 @@ class AC97_Controller(Elaboratable):
                     m.next = "TAG"
             with m.State("TAG"):
                 m.d.comb += self.sync_o.o.eq(1)
-                m.d.audio_bit_clk += adc_outputs_valid.eq(0)
+                with m.If(adc_valid_ack_sync):
+                    m.d.audio_bit_clk += adc_outputs_valid.eq(0)
                 with m.If(~dac_valid_ack & dac_inputs_valid_sync):
                     m.d.audio_bit_clk += [
                         dac_valid_ack.eq(1),
