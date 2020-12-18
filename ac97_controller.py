@@ -99,7 +99,6 @@ class AC97_Controller(Elaboratable):
         adc_valid_ack_sync = Signal()
         m.submodules.adc_valid_ack_2ff = FFSynchronizer(adc_valid_ack,
             adc_valid_ack_sync, o_domain="audio_bit_clk")
-        adc_pcm_l_sync = Signal(20)
 
         adc_pcm_l = Signal(20)
 
@@ -109,7 +108,7 @@ class AC97_Controller(Elaboratable):
             m.d.comb += self.adc_sample_received.eq(1)
             m.d.sync += [
                 adc_valid_ack.eq(1),
-                adc_pcm_l_sync.eq(adc_pcm_l)        
+                self.adc_left.eq(adc_pcm_l)        
             ]
         with m.If(~adc_outputs_valid_sync):
             m.d.sync += adc_valid_ack.eq(0)
