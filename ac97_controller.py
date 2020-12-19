@@ -70,8 +70,6 @@ class AC97_Controller(Elaboratable):
         dac_tag_sync = Signal(6)      
         dac_left_front_sync = Signal(20)        
 
-        
-
         m.d.comb += [
             self.sync_o.o.eq(0),
         ]

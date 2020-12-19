@@ -13,7 +13,7 @@ from pwm import *
 from ac97_controller import AC97_Controller
 
 class Tone_synth(Elaboratable):
-    def __init__(self, tone_frequency=440, clk_frequency=100000000, resolution = 10, pwm_resolution=None):
+    def __init__(self, tone_frequency=440, clk_frequency=100000000, resolution = 6, pwm_resolution=None):
         self.pwm_o = Pin(1, "o")
 
         self.phi_inc = calc_phi_inc(tone_frequency, clk_frequency)
@@ -40,29 +40,40 @@ class Tone_synth(Elaboratable):
                     ),
             ])
             self.pwm_o = platform.request("pwm")
-            
-            #request the AC97 interface signals, with DDR for the input
-            ac97_if = platform.request("audio_codec", 
-                xdr={"sdata_in":2, "sdata_out":1, "audio_sync":1, "reset_o":1})
-            ac97.sdata_in = ac97_if.sdata_in
-            ac97.sdata_out = ac97_if.sdata_out
-            ac97.sync_o = ac97_if.audio_sync
-            ac97.reset_o = ac97_if.flash_audio_reset_b
+
+            platform.add_resources([
+                Resource("load", 0,
+                    Pins("6", conn=("gpio", 0), dir ="o" ), 
+                    Attrs(IOSTANDARD="LVCMOS33")
+                    ),
+            ])
+            self.load_o = platform.request("load")
 
             #Get the clock from the codec
             m.domains.audio_bit_clk = ClockDomain()
             audio_clk = platform.request("audio_bit_clk")
             m.d.comb += ClockSignal("audio_bit_clk").eq(audio_clk)
             
+            #request the AC97 interface signals, with DDR for the input
+            ac97_if = platform.request("audio_codec", 
+                xdr={"sdata_in":2, "sdata_out":0, "audio_sync":0, "reset_o":0})
+            ac97_if.sdata_in.i_clk = audio_clk
+            ac97.sdata_in = ac97_if.sdata_in
+            ac97.sdata_out = ac97_if.sdata_out
+            ac97.sync_o = ac97_if.audio_sync
+            ac97.reset_o = ac97_if.flash_audio_reset_b
 
+            
+        zero=Signal(14)
         m.d.comb += [
             nco.phi_inc_i.eq(self.phi_inc),
             pwm.input_value_i.eq(nco.sine_wave_o),
             pwm.write_enable_i.eq(0),
             ac97.dac_left_front_i.eq(ac97.adc_left),
-            self.pwm_o.o.eq(pwm.pwm_o),       
+            #ac97.dac_left_front_i.eq(Cat(zero, nco.sine_wave_o)),
+            self.pwm_o.o.eq(pwm.pwm_o),   
+            self.load_o.o.eq(ac97.adc_sample_received),   
         ]
-
 
         return m
 
