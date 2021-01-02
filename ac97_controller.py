@@ -18,8 +18,7 @@ class AC97_DAC_Channels(Record):
             ("dac_centre", 20, Direction.FANIN),            # slot 6
             ("dac_left_surround", 20, Direction.FANIN),     # slot 7
             ("dac_right_surround", 20, Direction.FANIN),    # slot 8
-            ("dac_lfe", 20, Direction.FANIN),               # slot 9
-            ("dac_sample_written", 1, Direction.FANOUT),    # asserted for one cycle when inputs sampled
+            ("dac_lfe", 20, Direction.FANIN),               # slot 9           
         ]
         super().__init__(layout, name=name, src_loc_at=1)
 
@@ -43,7 +42,6 @@ def ac97_dac_connect(domain, source, sink):
         sink.dac_left_surround.eq(source.dac_left_surround),
         sink.dac_right_surround.eq(source.dac_right_surround),
         sink.dac_lfe.eq(source.dac_lfe),
-        source.dac_sample_written.eq(sink.dac_sample_written),
     ]
 
 
@@ -56,6 +54,8 @@ class AC97_Controller(Elaboratable):
         self.reset_o = Pin(width=1, dir="o")
 
         self.dac_channels_i = AC97_DAC_Channels(name="dac_channels_i")
+
+        self.dac_sample_written_o = Signal()    # asserted for one cycle when inputs sampled
       
         # pcm outputs from adc
         self.adc_tag = Signal(3)                #Indicates which slots are valid
@@ -67,14 +67,12 @@ class AC97_Controller(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        
         dac_inputs_valid = Signal()
         dac_valid_ack_sync = Signal()
         
         #input buffers
         dac_channels = AC97_DAC_Channels(name="dac_channels")
              
-
         with m.If (~dac_inputs_valid & ~dac_valid_ack_sync):    
             m.d.sync += [
                 dac_inputs_valid.eq(1),
@@ -82,7 +80,7 @@ class AC97_Controller(Elaboratable):
             ac97_dac_connect(m.d.sync, self.dac_channels_i, dac_channels)
 
         with m.If (dac_inputs_valid & dac_valid_ack_sync):
-            m.d.comb += self.dac_sample_written.eq(1)
+            m.d.comb += self.dac_sample_written_o.eq(1)
             m.d.sync += dac_inputs_valid.eq(0)
 
         #audio_bit_clk domain
@@ -230,7 +228,6 @@ class AC97_Controller(Elaboratable):
                     m.d.audio_bit_clk += bit_count.eq(20)
                     m.next = "IO_CTRL"
                    
-
         return m
 
 
@@ -262,5 +259,3 @@ if __name__=="__main__":
 
     with sim.write_vcd("ac97_waves.vcd"):
         sim.run_until(1e-4, run_passive=True)
-
-    
