@@ -46,8 +46,8 @@ class Tone_synth(Elaboratable):
         zero=Signal(10)
         m.d.comb += [
             nco.phi_inc_i.eq(self.phi_inc),
-            ac97.dac_left_front_i.eq(Cat(zero, nco.sine_wave_o)),
-        
+            ac97.dac_channels_i.dac_left_front.eq(Cat(zero, nco.sine_wave_o)),
+            ac97.dac_channels_i.dac_right_front.eq(Cat(zero, nco.sine_wave_o)),
         ]
 
 
