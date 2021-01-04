@@ -12,24 +12,13 @@ class AC97_DAC_Channels(Record):
     def __init__(self, name=None):
         layout = [
             # pcm inputs to dac
-            ("dac_tag", 6, Direction.FANIN),                #Indicates which slots are valid
+            ("dac_tag", 6, Direction.FANIN),                # Indicates which slots are valid
             ("dac_left_front", 20, Direction.FANIN),        # slot 3
             ("dac_right_front", 20, Direction.FANIN),       # slot 4
             ("dac_centre", 20, Direction.FANIN),            # slot 6
             ("dac_left_surround", 20, Direction.FANIN),     # slot 7
             ("dac_right_surround", 20, Direction.FANIN),    # slot 8
             ("dac_lfe", 20, Direction.FANIN),               # slot 9           
-        ]
-        super().__init__(layout, name=name, src_loc_at=1)
-
-class AC97_ADC_Channels(Record):
-    def __init__(self, name=None):
-        layout = [
-            ("adc_tag", 3, Direction.FANOUT),
-            ("adc_left", 20, Direction.FANOUT),
-            ("adc_right", 20, Direction.FANOUT),
-            ("adc_out_valid", 1, Direction.FANOUT),
-            ("adc_sample_received", 1, Direction.FANIN),
         ]
         super().__init__(layout, name=name, src_loc_at=1)
 
@@ -44,6 +33,21 @@ def ac97_dac_connect(domain, source, sink):
         sink.dac_lfe.eq(source.dac_lfe),
     ]
 
+class AC97_ADC_Channels(Record):
+    def __init__(self, name=None):
+        layout = [
+            ("adc_tag", 2, Direction.FANOUT),               # Indicates which slots are valid
+            ("adc_left", 20, Direction.FANOUT),             # slot 3
+            ("adc_right", 20, Direction.FANOUT),            # slot 4
+        ]
+        super().__init__(layout, name=name, src_loc_at=1)
+
+def ac97_adc_connect(domain, source, sink):
+    domain += [
+        sink.adc_tag.eq(source.adc_tag),
+        sink.adc_left.eq(source.adc_right),
+        sink.adc_right.eq(source.adc_right),
+    ]
 
 class AC97_Controller(Elaboratable):
     def __init__(self):
@@ -53,14 +57,12 @@ class AC97_Controller(Elaboratable):
         self.sync_o = Pin(width=1, dir="o")
         self.reset_o = Pin(width=1, dir="o")
 
+        #pcm inputs to dac
         self.dac_channels_i = AC97_DAC_Channels(name="dac_channels_i")
-
         self.dac_sample_written_o = Signal()    # asserted for one cycle when inputs sampled
       
         # pcm outputs from adc
-        self.adc_tag = Signal(3)                #Indicates which slots are valid
-        self.adc_left = Signal(20)              # slot 3
-        self.adc_right = Signal(20)             # slot 4
+        self.adc_channels_o = AC97_ADC_Channels(name="adc_channels_o")
         self.adc_out_valid = Signal()           # indicates the window in which  the adc_ outputs can be read
         self.adc_sample_received = Signal()
 
@@ -110,8 +112,7 @@ class AC97_Controller(Elaboratable):
 
         command_select = Signal(2)
 
-        #adc stuff
-        
+        #adc data from deserialiser to outputs        
         adc_outputs_valid = Signal()
         adc_outputs_valid_sync = Signal()
         m.submodules.adc_output_valid_2ff = FFSynchronizer(adc_outputs_valid,
@@ -121,20 +122,17 @@ class AC97_Controller(Elaboratable):
         m.submodules.adc_valid_ack_2ff = FFSynchronizer(adc_valid_ack,
             adc_valid_ack_sync, o_domain="audio_bit_clk")
 
-        adc_pcm_l = Signal(20)
-
+        adc_channels_bit_clk = AC97_ADC_Channels(name="adc_channels_bit_clk")
         m.d.comb += self.adc_sample_received.eq(0)
         
         with m.If(~adc_valid_ack & adc_outputs_valid_sync):
             m.d.comb += self.adc_sample_received.eq(1)
-            m.d.sync += [
-                adc_valid_ack.eq(1),
-                self.adc_left.eq(adc_pcm_l),     
-            ]
+            m.d.sync += adc_valid_ack.eq(1)
+            ac97_adc_connect(m.d.sync, adc_channels_bit_clk, self.adc_channels_o)
         with m.If(~adc_outputs_valid_sync):
             m.d.sync += adc_valid_ack.eq(0)
-        #interface
 
+        # AC97 interface
         with m.FSM(domain="audio_bit_clk") as ac97_if:
             with m.State("IO_CTRL"):
                 m.d.audio_bit_clk += adc_outputs_valid.eq(1)
@@ -155,7 +153,10 @@ class AC97_Controller(Elaboratable):
                     ]
                     ac97_dac_connect(m.d.audio_bit_clk, dac_channels, dac_channels_sync)
                 with m.If(~bit_count.any()):
-                    m.d.audio_bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += [
+                        bit_count.eq(19),
+                        adc_channels_bit_clk.adc_tag.eq(Cat(self.sdata_in.i1, shift_in[10])),
+                    ]
                     #send a command. for the basics it will loop through master volume, line out, headphones
                     with m.Switch(command_select):
                         with m.Case(0):
@@ -171,61 +172,64 @@ class AC97_Controller(Elaboratable):
                 with m.If(dac_valid_ack & ~dac_inputs_valid_sync):
                     m.d.audio_bit_clk += dac_valid_ack.eq(0)
                 with m.If(~bit_count.any()):
-                    m.d.audio_bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(19)
                     # don't need specifics since writing zeroes to these registers should unmute the channels
                     m.next = "CMD_DATA"
             with m.State("CMD_DATA"):
                 with m.If(~bit_count.any()):
                     m.d.audio_bit_clk += [
-                        bit_count.eq(20),
+                        bit_count.eq(19),
                         shift_out.eq(dac_channels_sync.dac_left_front),
                     ]
                     m.next = "L_FRONT"
             with m.State("L_FRONT"):
                 with m.If(~bit_count.any()):
                     m.d.audio_bit_clk += [
-                        bit_count.eq(20),
+                        bit_count.eq(19),
                         shift_out.eq(dac_channels_sync.dac_right_front),  
-                        adc_pcm_l.eq(Cat(self.sdata_in.i1, shift_in[0:19])),
+                        adc_channels_bit_clk.adc_left.eq(Cat(self.sdata_in.i1, shift_in[0:19])),
                     ]
                     m.next = "R_FRONT"
             with m.State("R_FRONT"):
                 with m.If(~bit_count.any()):
-                    m.d.audio_bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += [
+                        bit_count.eq(19),
+                        adc_channels_bit_clk.adc_right.eq(Cat(self.sdata_in.i1, shift_in[0:19])),
+                    ]
                     m.next = "LINE_1"
             with m.State("LINE_1"):
                 with m.If(~bit_count.any()):
-                    m.d.audio_bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(19)
                     m.next = "CENTER_MIC"
             with m.State("CENTER_MIC"):
                 with m.If(~bit_count.any()):
                     m.d.audio_bit_clk += [
-                        bit_count.eq(20),
+                        bit_count.eq(19),
                         shift_out.eq(dac_channels_sync.dac_left_surround),
                     ]
                     m.next = "L_SURR"
             with m.State("L_SURR"):
                 with m.If(~bit_count.any()):
                     m.d.audio_bit_clk += [
-                        bit_count.eq(20),
+                        bit_count.eq(19),
                         shift_out.eq(dac_channels_sync.dac_right_surround),
                     ]
                     m.next = "R_SURR"
             with m.State("R_SURR"):
                 with m.If(~bit_count.any()):
-                    m.d.audio_bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(19)
                     m.next = "LFE"
             with m.State("LFE"):
                 with m.If(~bit_count.any()):
-                    m.d.audio_bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(19)
                     m.next = "LINE_2"
             with m.State("LINE_2"):
                 with m.If(~bit_count.any()):
-                    m.d.audio_bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(19)
                     m.next = "HSET"
             with m.State("HSET"):
                 with m.If(~bit_count.any()):
-                    m.d.audio_bit_clk += bit_count.eq(20)
+                    m.d.audio_bit_clk += bit_count.eq(19)
                     m.next = "IO_CTRL"
                    
         return m
@@ -247,6 +251,8 @@ if __name__=="__main__":
         yield dut.dac_channels_i.dac_left_front.eq(10)
 
     def adc_input():
+        for n in range(0, 56):
+            yield
         while True:
             yield dut.sdata_in.i1.eq(1)
             yield

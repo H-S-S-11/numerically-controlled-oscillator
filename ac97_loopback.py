@@ -63,13 +63,12 @@ class Tone_synth(Elaboratable):
             ac97.sync_o = ac97_if.audio_sync
             ac97.reset_o = ac97_if.flash_audio_reset_b
   
-        zero=Signal(14)
         m.d.comb += [
             nco.phi_inc_i.eq(self.phi_inc),
             pwm.input_value_i.eq(nco.sine_wave_o),
             pwm.write_enable_i.eq(0),
-            ac97.dac_channels_i.dac_left_front.eq(ac97.adc_left),
-            ac97.dac_channels_i.dac_right_front.eq(ac97.adc_right),
+            ac97.dac_channels_i.dac_left_front.eq(ac97.adc_channels_o.adc_left),
+            ac97.dac_channels_i.dac_right_front.eq(ac97.adc_channels_o.adc_right),
             self.pwm_o.o.eq(pwm.pwm_o),   
             self.load_o.o.eq(ac97.adc_sample_received),   
         ]
