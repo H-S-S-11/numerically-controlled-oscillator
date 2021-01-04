@@ -27,8 +27,10 @@ class Tone_synth(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        m.submodules.nco_1 = self.nco_1 = nco_1 = NCO_LUT(output_width= self.pwm_resolution, sin_input_width=self.resolution)
-        m.submodules.nco_2 = self.nco_2 = nco_2 = NCO_LUT(output_width= self.pwm_resolution, sin_input_width=self.resolution)
+        m.submodules.nco_1 = self.nco_1 = nco_1 = NCO_LUT(output_width=self.pwm_resolution, 
+            sin_input_width=self.resolution)
+        m.submodules.nco_2 = self.nco_2 = nco_2 = NCO_LUT(output_width=self.pwm_resolution, 
+            sin_input_width=self.resolution, signed_output=False)
         m.submodules.ac97 = self.ac97 = ac97 = AC97_Controller()
     
         if(platform != None):
@@ -45,15 +47,13 @@ class Tone_synth(Elaboratable):
             audio_clk = platform.request("audio_bit_clk")
             m.d.comb += ClockSignal("audio_bit_clk").eq(audio_clk)
             
-
         zero=Signal(10)
         m.d.comb += [
-            nco_1.phi_inc_i.eq(self.phi_inc),
+            nco_1.phi_inc_i.eq(self.phi_inc_2),
             nco_2.phi_inc_i.eq(self.phi_inc_2),
             ac97.dac_channels_i.dac_left_front.eq(Cat(zero, nco_1.sine_wave_o)),
             ac97.dac_channels_i.dac_right_front.eq(Cat(zero, nco_2.sine_wave_o)),
         ]
-
 
         return m
 
