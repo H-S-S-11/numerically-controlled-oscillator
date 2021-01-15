@@ -100,9 +100,9 @@ if __name__=="__main__":
     def signal(t):
         # frequency is (w/pi) MHz
         # max w is pi. (represents nyquist rate). default filter cutoff is 1.57
-        w1 = 0.5
+        w1 = 1.26
         w2 = 1.7
-        return (math.sin(w1*t) + math.sin(w2*t) )/2
+        return (math.sin(w1*t) + 0*math.sin(w2*t) )
 
     def tb():
         yield dut.input.eq(2**15 -1)    # calibrate waves for gtkwave
@@ -122,6 +122,10 @@ if __name__=="__main__":
             for n in range(0, 49):
                 yield
         # gain of just over 0.5 at 50kHz, -3dB
+        # 0.5 at 100kHz, -3dB
+        # 0.485 at 200kHz 
+        # 0.500 at 300kHz
+        # 0.38 at 400kHz
         # 0.3 at 500kHz, -5dB
         # 0.037 at 640kHz, -14dB
         # 0.0018 at 800 kHz, -27dB
