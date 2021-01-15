@@ -1,21 +1,25 @@
 from nmigen import *
 from nmigen.sim import *
-#import numpy
 import math
+from scipy import signal
 
 class FIR_Pipelined(Elaboratable):
-    def __init__(self, width = 16, coefficients=None):
-        self.coefficients = [   #LPF at approximately half of nyquist rate, eg 10kHz at 40kHz sample rate
-            -81, -134, 318, 645, -1257, -2262, 4522, 14633, 
-            14633, 4522, -2262, -1257, 645, 318, -134, -81
-        ]
-        if (coefficients != None):
-            pass
-            #self.coefficients = coefficients #here do conversion from float to int
+    def __init__(self, width = 16, taps=16, cutoff=0.5, filter_type='lowpass', macc_width=32):
+ 
+        fir_coeff = (signal.firwin(taps, cutoff, pass_zero=filter_type)*2**(width-1))
+        self.coefficients = []
+        for n in range(0, taps):
+            self.coefficients.append(round(fir_coeff[n]))
 
+        if(width*2 > macc_width):
+            raise ValueError('MACC width must be at least 2*sample width')
+        if((width*2 + math.ceil(math.log2(taps))) >= macc_width):
+            print("Warning! Possible insufficient guard bits, potential MACC overflow!")
+        self.macc_width = macc_width
         self.width = width
         self.sample = Shape(width=self.width, signed=True)
         self.taps = len(self.coefficients)
+        self.latency = self.taps + 3    # min. number of clock cycles per sample
 
         self.input = Signal(shape = self.sample) 
         self.input_ready_i = Signal()
@@ -26,8 +30,8 @@ class FIR_Pipelined(Elaboratable):
         m = Module()
 
         sample_count = Signal(math.ceil(math.log2(self.taps)))
-        accumulator = Signal(shape = Shape(width=32, signed=True))
-        multiply_result = Signal(shape = Shape(width=32, signed=True))
+        accumulator = Signal(shape = Shape(width=self.macc_width, signed=True))
+        multiply_result = Signal(shape = Shape(width=self.macc_width, signed=True))
 
         multiplicand1 = Signal(shape = self.sample) 
         multiplicand2 = Signal(shape = self.sample) 
@@ -51,9 +55,9 @@ class FIR_Pipelined(Elaboratable):
         with m.FSM() as fir_fsm:
             with m.State("WAIT"):
                 m.next = "WAIT"
-                m.d.sync += accumulator.eq(0)
+                m.d.sync += accumulator.eq(0)   
                 with m.If(self.input_ready_i):
-                    m.next = "LOAD"
+                    m.next = "LOAD"           
 
             with m.State("LOAD"):
                 m.next = "PROCESSING"
@@ -75,8 +79,8 @@ class FIR_Pipelined(Elaboratable):
                 m.next = "WAIT"
                 m.d.sync += [
                     self.output_ready_o.eq(1),
-                    self.output.eq(accumulator[(32-self.width):32]),
-                ]
+                    self.output.eq(accumulator[self.width:self.width*2]),
+                ]                
 
         return m
 
@@ -85,7 +89,7 @@ if __name__=="__main__":
     #from scipy import signal
     import math
 
-    dut = FIR_Pipelined()
+    dut = FIR_Pipelined(taps=32, width=18, macc_width=48)
     sim = Simulator(dut)
     sim.add_clock(10e-9) #100MHz
 
@@ -100,9 +104,9 @@ if __name__=="__main__":
     def signal(t):
         # frequency is (w/pi) MHz
         # max w is pi. (represents nyquist rate). default filter cutoff is 1.57
-        w1 = 1.26
-        w2 = 1.7
-        return (math.sin(w1*t) + 0*math.sin(w2*t) )
+        w1 = 0.5
+        w2 = 1
+        return ( math.sin(w1*t) + 0*math.sin(w2*t) )
 
     def tb():
         yield dut.input.eq(2**15 -1)    # calibrate waves for gtkwave
