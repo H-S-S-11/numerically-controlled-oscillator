@@ -98,22 +98,35 @@ if __name__=="__main__":
             yield
 
     def signal(t):
-        # frequency is (w/2*pi)*2 MHz
-        # max w is pi. (represents nyquist rate)
-        w1 = 3.14159
-        return (math.sin(w1*t) )/2
+        # frequency is (w/pi) MHz
+        # max w is pi. (represents nyquist rate). default filter cutoff is 1.57
+        w1 = 0.5
+        w2 = 1.7
+        return (math.sin(w1*t) + math.sin(w2*t) )/2
 
     def tb():
-        yield dut.input.eq(0)
+        yield dut.input.eq(2**15 -1)    # calibrate waves for gtkwave
+        yield dut.output.eq(2**15 -1)   
         yield
-        for t in range(0,100):      #100 samples with a 50 clock cycle sampling period 
+        yield dut.input.eq(-2**15)
+        yield dut.output.eq(-2**15)
+        yield
+        yield dut.input.eq(0)
+        yield dut.output.eq(0)
+        yield
+        for t in range(0,1000):      #100 samples with a 50 clock cycle sampling period 
             yield dut.input_ready_i.eq(1)    # (500ns, 2MHz sample rate. default filter has 500kHz cutoff)            
-            yield dut.input.eq(round(signal(t)*(2**15)))
+            yield dut.input.eq(round(signal(t)*(2**15 -1)))
             yield
             yield dut.input_ready_i.eq(0)
             for n in range(0, 49):
                 yield
-        
+        # gain of just over 0.5 at 50kHz, -3dB
+        # 0.3 at 500kHz, -5dB
+        # 0.037 at 640kHz, -14dB
+        # 0.0018 at 800 kHz, -27dB
+        # 0.0006 at 950kHz, -32dB
+        # 0.00003 at 1MHz, -45dB (square wave, max amplitude in results in alternating 0/-1. nyquist rate reached)
 
     sim.add_sync_process(clock)
     sim.add_sync_process(tb)
