@@ -3,7 +3,7 @@ from nmigen.sim import *
 #import numpy
 import math
 
-class FIR(Elaboratable):
+class FIR_Pipelined(Elaboratable):
     def __init__(self, width = 16, coefficients={0.1, 0.2}):
         #self.coefficients = coefficients #here do conversion from float to int
         self.coefficients = {   #10kHz LPF at 44kHz-ish sampling rate
