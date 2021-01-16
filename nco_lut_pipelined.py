@@ -91,8 +91,8 @@ class NCO_LUT_Pipelined(Elaboratable):
         table_entry = Signal(input_width)
         m.d.comb += table_entry.eq(phi[32-input_width:32])
 
-        #generate_init_file("./build/mem_init.mem", 10, 10)
-        bram = get_xilinx_bram("mem_init.mem", table_entry, Signal(10), sin_o, Signal(2), ClockSignal(), ResetSignal())
+        #generate_init_file("./build/mem_init.mem", 8, 8)
+        bram = get_xilinx_bram("mem_init.mem", table_entry, Signal(8), sin_o, Signal(2), ClockSignal(), ResetSignal())
         m.submodules += bram
 
         return m
