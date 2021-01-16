@@ -158,7 +158,7 @@ if __name__=="__main__":
             yield
             for t in range(0,1000):      #100 samples with a 50 clock cycle sampling period 
                 yield dut.input_ready_i.eq(1)    # (500ns, 2MHz sample rate)            
-                yield dut.input.eq(round(math.sin(omega*t)*(2**15 -1)))
+                yield dut.input.eq(round(math.sin(omega*t)*(2**17 -1)))
                 yield
                 yield dut.input_ready_i.eq(0)
                 for n in range(0, 49):
@@ -177,9 +177,9 @@ if __name__=="__main__":
                 for n in range(0, 40):
                     yield
         
-        
+        # fs/2 = 1000kHz
         dut = FIR_Pipelined(width=18, macc_width=48,
-        taps=32, cutoff=0.5, filter_type='lowpass')
+        taps=33, cutoff=0.001, filter_type='highpass')
 
         def find_gain(frequency):
             global omega
@@ -190,8 +190,13 @@ if __name__=="__main__":
             sweep.add_sync_process(find_max_out) 
             sweep.add_sync_process(freq_tb)       
             sweep.run_until(5e-5, run_passive=True)
-            return max_output/(2**15-1)
+            return max_output/(2**17-1)
 
-        print(find_gain(100))
-        print(find_gain(200))
+        with open("frequency_sweep.csv", "w") as gains_out:
+            gains_out.write('Freq (kHz), Gain, Gain(dB) \n')
+            for decade in range(0, 3):
+                for step in range(1, 20):
+                    f = 0.5*step*(10**decade)
+                    gain = str(find_gain(f))
+                    gains_out.write(str(f) + ',' + gain + '\n')
 

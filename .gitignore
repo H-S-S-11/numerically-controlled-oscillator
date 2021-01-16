@@ -3,3 +3,4 @@
 *.pyc
 *.v
 /build
+frequency_sweep.csv
