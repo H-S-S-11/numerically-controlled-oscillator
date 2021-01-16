@@ -47,8 +47,8 @@ def get_xilinx_bram(init_file, address, data_in, data_out, write_en, clk, rst):
         p_DO_REG = 1,
         p_INIT_FILE=init_file,
         p_WRITE_MODE="READ_FIRST",
-        p_WRITE_WIDTH = 10,
-        p_READ_WIDTH = 10,
+        p_WRITE_WIDTH = 8,
+        p_READ_WIDTH = 8,
         o_DO = data_out,
         i_ADDR = address,
         i_CLK = clk,
@@ -91,8 +91,8 @@ class NCO_LUT_Pipelined(Elaboratable):
         table_entry = Signal(input_width)
         m.d.comb += table_entry.eq(phi[32-input_width:32])
 
-        generate_init_file("./build/mem_init.coe", 10, 10)
-        bram = get_xilinx_bram("mem_init.coe", table_entry, Signal(10), sin_o, Signal(2), ClockSignal(), ResetSignal())
+        #generate_init_file("./build/mem_init.mem", 10, 10)
+        bram = get_xilinx_bram("mem_init.mem", table_entry, Signal(10), sin_o, Signal(2), ClockSignal(), ResetSignal())
         m.submodules += bram
 
         return m
