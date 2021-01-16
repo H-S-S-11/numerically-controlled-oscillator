@@ -18,23 +18,44 @@ def calc_phi_inc(desired_freq, clock_freq):
     ratio = desired_freq/(clock_freq/2)
     return int(ratio*max_inc)
 
-def get_xilinx_bram(address, data_in, data_out, write_en, domain):
+def twos_complement(decimal, bits):
+    if(decimal >= 0):
+        result =  bin(decimal)[2:]
+        while len(result) < bits:
+            result = "0" + result
+        return result
+    else:
+        inverted = 2**bits + decimal
+        return twos_complement(inverted, bits)
+
+def generate_init_file(file, data_width, addr_width, signed_output = True):
+    with open(file, "w") as mem_out:
+        mem_out.write('memory_initialization_radix=2;'+'\n'+'memory_initialization_vector=\n')
+        for n in range(0, 2**addr_width-1):
+            decimal = gen_lookup(n, addr_width, data_width, signed_output=signed_output)
+            bin_out = twos_complement(decimal, data_width)
+            mem_out.write(bin_out + ',\n')
+        decimal = gen_lookup(2**addr_width, addr_width, data_width, signed_output=signed_output)
+        bin_out = twos_complement(decimal, data_width)
+        mem_out.write(bin_out + ';')
+
+def get_xilinx_bram(init_file, address, data_in, data_out, write_en, clk, rst):
     # 3 possible macros: SDP, TDP (simple/true dual port), SINGLE. start with single.
     bram = Instance("BRAM_SINGLE_MACRO", 
         p_BRAM_SIZE="18Kb",
         p_DEVICE="VIRTEX5",
         p_DO_REG = 1,
-        p_INIT_FILE="NONE",
+        p_INIT_FILE=init_file,
         p_WRITE_MODE="READ_FIRST",
         p_WRITE_WIDTH = 10,
         p_READ_WIDTH = 10,
         o_DO = data_out,
         i_ADDR = address,
-        i_CLK = ClockSignal(domain=domain),
+        i_CLK = clk,
         i_DI = data_in,
         i_EN = 1,
         i_REGCE = 1,
-        i_RST = ResetSignal(domain=domain),
+        i_RST = rst,
         i_WE = write_en,
         )
     return bram
@@ -70,8 +91,8 @@ class NCO_LUT_Pipelined(Elaboratable):
         table_entry = Signal(input_width)
         m.d.comb += table_entry.eq(phi[32-input_width:32])
 
-        bram = get_xilinx_bram(table_entry, 0, sin_o, 0, m.d.sync)
-
+        generate_init_file("./build/mem_init.coe", 10, 10)
+        bram = get_xilinx_bram("mem_init.coe", table_entry, Signal(10), sin_o, Signal(2), ClockSignal(), ResetSignal())
         m.submodules += bram
 
         return m
