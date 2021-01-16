@@ -4,14 +4,14 @@ from nmigen.lib.cdc import *
 from nmigen.lib.io import *
 from nmigen.hdl.rec import Direction
 
-# AC97 is a 16 bit "Tag" followed by 12 20-bit data backets,
+# AC97 is a 16 bit "Tag" followed by 12 20-bit (signed) data backets,
 # with the interface written to on rising edges of audio_bit_clk,
 # and sampled on the falling edge
 
 class AC97_DAC_Channels(Record):
     def __init__(self, name=None):
         layout = [
-            # pcm inputs to dac
+            # signed pcm inputs to dac
             ("dac_tag", 6, Direction.FANIN),                # Indicates which slots are valid
             ("dac_left_front", 20, Direction.FANIN),        # slot 3
             ("dac_right_front", 20, Direction.FANIN),       # slot 4
@@ -57,11 +57,11 @@ class AC97_Controller(Elaboratable):
         self.sync_o = Pin(width=1, dir="o")
         self.reset_o = Pin(width=1, dir="o")
 
-        #pcm inputs to dac
+        # signed pcm inputs to dac
         self.dac_channels_i = AC97_DAC_Channels(name="dac_channels_i")
         self.dac_sample_written_o = Signal()    # asserted for one cycle when inputs sampled
       
-        # pcm outputs from adc
+        # signed pcm outputs from adc
         self.adc_channels_o = AC97_ADC_Channels(name="adc_channels_o")
         self.adc_out_valid = Signal()           # indicates the window in which  the adc_ outputs can be read
         self.adc_sample_received = Signal()
