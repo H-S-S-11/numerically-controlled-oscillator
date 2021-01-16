@@ -84,14 +84,11 @@ class FIR_Pipelined(Elaboratable):
 
         return m
 
-
 if __name__=="__main__":
-    #from scipy import signal
-    import math
 
-    dut = FIR_Pipelined(taps=32, width=18, macc_width=48)
-    sim = Simulator(dut)
-    sim.add_clock(10e-9) #100MHz
+    freq_response = True
+    
+    
 
     def clock():
         while True:
@@ -101,12 +98,12 @@ if __name__=="__main__":
         while (not (yield dut.output_ready_o)):
             yield
 
-    def signal(t):
+    def input_signal(t):
         # frequency is (w/pi) MHz
         # max w is pi. (represents nyquist rate). default filter cutoff is 1.57
-        w1 = 0.5
+        w1 = 0.2
         w2 = 1
-        return ( math.sin(w1*t) + 0*math.sin(w2*t) )
+        return ( math.sin(w1*t) + math.sin(w2*t) )/2
 
     def tb():
         yield dut.input.eq(2**15 -1)    # calibrate waves for gtkwave
@@ -120,7 +117,7 @@ if __name__=="__main__":
         yield
         for t in range(0,1000):      #100 samples with a 50 clock cycle sampling period 
             yield dut.input_ready_i.eq(1)    # (500ns, 2MHz sample rate. default filter has 500kHz cutoff)            
-            yield dut.input.eq(round(signal(t)*(2**15 -1)))
+            yield dut.input.eq(round(input_signal(t)*(2**15 -1)))
             yield
             yield dut.input_ready_i.eq(0)
             for n in range(0, 49):
@@ -136,8 +133,65 @@ if __name__=="__main__":
         # 0.0006 at 950kHz, -32dB
         # 0.00003 at 1MHz, -45dB (square wave, max amplitude in results in alternating 0/-1. nyquist rate reached)
 
-    sim.add_sync_process(clock)
-    sim.add_sync_process(tb)
+    
+    if(not freq_response):
 
-    with sim.write_vcd("fir_waves.vcd"):
-        sim.run_until(5e-5, run_passive=True)
+        dut = FIR_Pipelined(width=18, macc_width=48,
+        taps=33, cutoff=0.1, filter_type='highpass')
+        sim = Simulator(dut)
+        sim.add_clock(10e-9) #100MHz
+        sim.add_sync_process(clock)
+        sim.add_sync_process(tb)
+
+        with sim.write_vcd("fir_waves.vcd"):
+            sim.run_until(5e-5, run_passive=True)
+    
+    else:
+        
+        fir_taps = 33
+        # frequency is (w/pi)*1000 kHz
+        # max w is pi. (represents nyquist rate)
+        omega = 0.2
+        def freq_tb():
+            yield dut.input.eq(0)
+            yield dut.output.eq(0)
+            yield
+            for t in range(0,1000):      #100 samples with a 50 clock cycle sampling period 
+                yield dut.input_ready_i.eq(1)    # (500ns, 2MHz sample rate)            
+                yield dut.input.eq(round(math.sin(omega*t)*(2**15 -1)))
+                yield
+                yield dut.input_ready_i.eq(0)
+                for n in range(0, 49):
+                    yield
+
+        max_output = 0
+        def find_max_out():
+            global max_output
+            max_output = 0
+            for n in range(0, 50*fir_taps): # let the transient settle
+                    yield
+            while True:
+                out = yield dut.output
+                if(abs(out) > max_output):
+                    max_output = abs(out)
+                for n in range(0, 40):
+                    yield
+        
+        
+        dut = FIR_Pipelined(width=18, macc_width=48,
+        taps=32, cutoff=0.5, filter_type='lowpass')
+
+        def find_gain(frequency):
+            global omega
+            omega = (frequency*3.14)/1000
+            sweep = Simulator(dut)
+            sweep.add_clock(10e-9) #100MHz
+            sweep.add_sync_process(clock)
+            sweep.add_sync_process(find_max_out) 
+            sweep.add_sync_process(freq_tb)       
+            sweep.run_until(5e-5, run_passive=True)
+            return max_output/(2**15-1)
+
+        print(find_gain(100))
+        print(find_gain(200))
+
