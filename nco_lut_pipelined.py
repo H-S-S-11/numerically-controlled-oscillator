@@ -60,6 +60,25 @@ def get_xilinx_bram(init_file, address, data_in, data_out, write_en, clk, rst):
         )
     return bram
 
+def get_xilinx_RAMB16(init_file, address, data_in, data_out, write_en, clk, rst):
+    # 3 possible macros: SDP, TDP (simple/true dual port), SINGLE. start with single.
+    bram = Instance("RAMB18SDP", 
+        p_DO_REG = 1,
+        p_INIT_FILE=init_file,
+        o_DO = data_out,
+        i_WRADDR = address,
+        i_RDADDR = address,
+        i_WRCLK = clk,
+        i_RDCLK = clk,
+        i_DI = data_in,
+        i_RDEN = Signal(1, reset=1),
+        i_WREN = 0,
+        i_REGCE = Signal(1, reset=1),
+        i_SSR = 0,
+        i_WE = write_en,
+        )
+    return bram
+
 class NCO_LUT_Pipelined(Elaboratable):
     def __init__(self, output_width=8, sin_input_width=None, signed_output=True):
         self.phi_inc_i = Signal(31)
@@ -91,8 +110,8 @@ class NCO_LUT_Pipelined(Elaboratable):
         table_entry = Signal(input_width)
         m.d.comb += table_entry.eq(phi[32-input_width:32])
 
-        #generate_init_file("./build/mem_init.mem", 8, 8)
-        bram = get_xilinx_bram("mem_init.mem", table_entry, Signal(8), sin_o, Signal(2), ClockSignal(), ResetSignal())
+        generate_init_file("./build/mem_init.mem", 8, 8)
+        bram = get_xilinx_RAMB16("mem_init.mem", table_entry, Signal(8), sin_o, Signal(4), ClockSignal(), ResetSignal())
         m.submodules += bram
 
         return m
