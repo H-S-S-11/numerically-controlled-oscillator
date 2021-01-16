@@ -18,26 +18,24 @@ def calc_phi_inc(desired_freq, clock_freq):
     ratio = desired_freq/(clock_freq/2)
     return int(ratio*max_inc)
 
-def twos_complement(decimal, bits):
+def twos_complement_hex(decimal, bits):
     if(decimal >= 0):
-        result =  bin(decimal)[2:]
-        while len(result) < bits:
+        result =  hex(decimal)[2:]
+        while len(result) < bits/4:
             result = "0" + result
         return result
     else:
         inverted = 2**bits + decimal
-        return twos_complement(inverted, bits)
+        return twos_complement_hex(inverted, bits)
 
 def generate_init_file(file, data_width, addr_width, signed_output = True):
     with open(file, "w") as mem_out:
-        mem_out.write('memory_initialization_radix=2;'+'\n'+'memory_initialization_vector=\n')
-        for n in range(0, 2**addr_width-1):
+        mem_out.write('@00000000\n')
+        for n in range(0, 512):
             decimal = gen_lookup(n, addr_width, data_width, signed_output=signed_output)
-            bin_out = twos_complement(decimal, data_width)
-            mem_out.write(bin_out + ',\n')
-        decimal = gen_lookup(2**addr_width, addr_width, data_width, signed_output=signed_output)
-        bin_out = twos_complement(decimal, data_width)
-        mem_out.write(bin_out + ';')
+            hex_out = twos_complement_hex(decimal, 32)
+            mem_out.write('0' + hex_out + '\n')
+ 
 
 def get_xilinx_bram(init_file, address, data_in, data_out, write_en, clk, rst):
     # 3 possible macros: SDP, TDP (simple/true dual port), SINGLE. start with single.
@@ -98,8 +96,6 @@ class NCO_LUT_Pipelined(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-          
-
         sin_o = self.sine_wave_o
         input_width = self.sin_input_width
         output_width = self.output_width
@@ -111,8 +107,10 @@ class NCO_LUT_Pipelined(Elaboratable):
         m.d.comb += table_entry.eq(phi[32-input_width:32])
 
         generate_init_file("./build/mem_init.mem", 8, 8)
-        bram = get_xilinx_RAMB16("mem_init.mem", table_entry, Signal(8), sin_o, Signal(4), ClockSignal(), ResetSignal())
+        read_port = Signal(32)
+        bram = get_xilinx_RAMB16("mem_init.mem", Cat(table_entry, Signal(1)), Signal(32), read_port, Signal(4), ClockSignal(), ResetSignal())
         m.submodules += bram
+        m.d.comb += sin_o.eq(read_port[0:8])
 
         return m
 
