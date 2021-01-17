@@ -1,23 +1,8 @@
 from nmigen import *
 from nmigen.sim import *
 from bram_instantiation import *
+from nco_lut import *
 import math
-
-def gen_lookup(entry, input_width, output_width, signed_output=True):
-    #map the inputs to a normal phase
-    phase = 2.0*math.pi*(entry/((2**input_width)-1))
-    if signed_output:
-        sin_phi = math.sin(phase)/2
-    else:
-        sin_phi = (math.sin(phase)+1)/2
-    #map the output to a range of uints
-    output = int((sin_phi)*((2**output_width)-1))
-    return output
-
-def calc_phi_inc(desired_freq, clock_freq):
-    max_inc = (2**31)-1 #this would result in output frequency of fclk/2
-    ratio = desired_freq/(clock_freq/2)
-    return int(ratio*max_inc)
 
 def twos_complement(decimal, bits):
     if(decimal >= 0):
@@ -25,7 +10,6 @@ def twos_complement(decimal, bits):
     else:
         inverted = 2**bits + decimal
         return twos_complement(inverted, bits)
-
 
 def generate_init_data(data_width, addr_width, signed_output = True):
     init_data = {}
@@ -42,9 +26,9 @@ def generate_init_data(data_width, addr_width, signed_output = True):
         init_data['p_INIT_'+ line_string] = init_line
     return init_data
  
-
-
 class NCO_LUT_Pipelined(Elaboratable):
+    # Instantiates a BRAM with the data output register to achieve much higher frequencies than
+    # otherwise possible (with inferred ROM), up to the BRAM Fmax when tested
     def __init__(self, output_width=8, sin_input_width=None, signed_output=True):
         self.phi_inc_i = Signal(31)
 
@@ -63,43 +47,22 @@ class NCO_LUT_Pipelined(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        sin_o = self.sine_wave_o
         input_width = self.sin_input_width
         output_width = self.output_width
 
         phi = Signal(32)
-        m.d.sync += phi.eq(phi + self.phi_inc_i)
-
         table_entry = Signal(input_width)
+        m.d.sync += phi.eq(phi + self.phi_inc_i)        
         m.d.comb += table_entry.eq(phi[32-input_width:32])
 
-        init = generate_init_data(self.output_width, self.sin_input_width)
-       
-        brom = BROMWrapper(init)
-        m.submodules.brom = brom
+        init = generate_init_data(output_width, input_width)
+        m.submodules.brom = brom = BROMWrapper(init)
         m.d.sync += [
-            sin_o.eq(brom.read_port[0:output_width]),
+            self.sine_wave_o.eq(brom.read_port[0:output_width]),
             brom.address.eq(table_entry),
         ]
 
         return m
 
 if __name__ == "__main__":
-
-    dut = NCO_LUT_Pipelined(signed_output=True)
-    sim = Simulator(dut)
-    sim.add_clock(10e-9) #100MHz
-
-    def clock():
-        while True:
-            yield
-
-    def input_freq():
-        phi_inc = calc_phi_inc(9000000, 100000000) #9MHz
-        yield dut.phi_inc_i.eq(phi_inc)
-
-    sim.add_sync_process(clock)
-    sim.add_sync_process(input_freq)
-
-    with sim.write_vcd("NCO_LUT_waves.vcd"):
-        sim.run_until(1e-5)
+    print("No sim model of BRAM primitive, cannot simulate")
