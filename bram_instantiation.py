@@ -9,29 +9,32 @@ import itertools
 def get_xilinx_RAMB16(init_file, address, data_in, data_out, write_en, clk, rst):
     # 3 possible macros: SDP, TDP (simple/true dual port), SINGLE. start with single.
     bram = Instance("RAMB18SDP", 
-        p_DO_REG = 0,
-        p_INIT_FILE=init_file,
+        p_DO_REG = 1,
         o_DO = data_out,
+        #   each INIT_xx paramater represents a block of 8 words
+        #   (BRAM is 32 bits wide without parity)
+        #   MSB first in the parameter
         i_WRADDR = address,
         i_RDADDR = address,
         i_WRCLK = clk,
         i_RDCLK = clk,
         i_DI = data_in,
-        i_RDEN = Signal(1, reset=1),
-        i_WREN = 0,
-        i_REGCE = Signal(1, reset=1),
-        i_SSR = 0,
+        i_RDEN = Const(1, unsigned(1)),
+        i_WREN = Const(0, unsigned(1)),
+        i_REGCE = Const(1, unsigned(1)),
+        i_SSR = Const(0, unsigned(1)),
         i_WE = write_en,
         )
     return bram
 
+#   leftover from BMM experiments. consider deleting
 class BRAMWrapper(Elaboratable):
     def __init__(self):
         self.read_port = Signal(32)
         self.address = Signal(9)
     def elaborate(self, platform):
         m = Module()
-        bram_prim = get_xilinx_RAMB16("mem_init.mem", self.address, Signal(32), self.read_port, Signal(4), ClockSignal(), ResetSignal())
+        bram_prim = get_xilinx_RAMB16("mem_init.mem", self.address, Const(0, unsigned(32)), self.read_port, Signal(4), ClockSignal(), ResetSignal())
         m.submodules += bram_prim
         return m
 
@@ -55,12 +58,12 @@ class BRAMTest(Elaboratable):
 
         led     = [res.o for res in get_all_resources("led")]
         switches = [res.i for res in get_all_resources("switch")]
+       
+        bram = BRAMWrapper()
+        m.submodules.bram = bram
 
-        bram = BRAMWrapper(name="bram0")
-        m.submodules += bram
-        m.d.comb += bram.address.eq(Cat(switches, Signal(1)))
-
-        m.d.sync += [
+        m.d.comb += [
+            bram.address.eq( Cat(switches, Const(0, unsigned(1))) ),
             Cat(led[0], led[1]).eq(bram.read_port[0:2]),
             led[2].eq(switches[0]),
         ]
