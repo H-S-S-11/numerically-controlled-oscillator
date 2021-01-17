@@ -6,7 +6,7 @@ from nmigen_boards.ml505 import ML505Platform
 from nmigen_boards.test.blinky import *
 import itertools
 
-def get_xilinx_RAMB16(init_file, address, data_in, data_out, write_en, clk, rst, init_data):
+def get_xilinx_RAMB16(address, data_in, data_out, write_en, clk, rst, init_data=None):
     # 3 possible macros: SDP, TDP (simple/true dual port), SINGLE. start with single.
     bram = Instance("RAMB18SDP", 
         p_DO_REG = 1,
@@ -28,23 +28,23 @@ def get_xilinx_RAMB16(init_file, address, data_in, data_out, write_en, clk, rst,
         )
     return bram
 
-#   leftover from BMM experiments. consider deleting
-class BRAMWrapper(Elaboratable):
-    def __init__(self):
+
+class BROMWrapper(Elaboratable):
+    def __init__(self, ROM_data):
         self.read_port = Signal(32)
         self.address = Signal(9)
+        self.ROM_data = ROM_data
     def elaborate(self, platform):
         m = Module()
-        init = { 'p_INIT_00':Const(10, unsigned(256)) }
-        bram_prim = get_xilinx_RAMB16("mem_init.mem", self.address, Const(0, unsigned(32)),
-            self.read_port, Const(0, unsigned(4)), ClockSignal(), ResetSignal(), init)
+        
+        bram_prim = get_xilinx_RAMB16(self.address, Const(0, unsigned(32)), self.read_port, 
+            Const(0, unsigned(4)), ClockSignal(), ResetSignal(), init_data=self.ROM_data)
         m.submodules += bram_prim
         return m
 
 class BRAMTest(Elaboratable):
     def __init__(self):
         pass
-
 
     def elaborate(self, platform):
 
@@ -62,7 +62,8 @@ class BRAMTest(Elaboratable):
         led     = [res.o for res in get_all_resources("led")]
         switches = [res.i for res in get_all_resources("switch")]
        
-        bram = BRAMWrapper()
+        init = { 'p_INIT_00':Const(10, unsigned(256)) }
+        bram = BROMWrapper(init)
         m.submodules.bram = bram
 
         m.d.comb += [
@@ -73,5 +74,6 @@ class BRAMTest(Elaboratable):
 
         return m
 
-bram_test = BRAMTest()
-ML505Platform().build(bram_test, do_build=False, do_program=False).execute_local(run_script=False)
+if __name__=="__main__":
+    bram_test = BRAMTest()
+    ML505Platform().build(bram_test, do_build=False, do_program=False).execute_local(run_script=False)
