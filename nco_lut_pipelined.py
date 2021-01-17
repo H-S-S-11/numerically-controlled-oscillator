@@ -77,7 +77,7 @@ class NCO_LUT_Pipelined(Elaboratable):
        
         brom = BROMWrapper(init)
         m.submodules.brom = brom
-        m.d.comb += [
+        m.d.sync += [
             sin_o.eq(brom.read_port[0:output_width]),
             brom.address.eq(table_entry),
         ]

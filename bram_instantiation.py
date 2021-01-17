@@ -30,7 +30,7 @@ def get_xilinx_RAMB16(address, data_in, data_out, write_en, clk, rst, init_data=
 
 # useful for making sure names don't clash and possibly confuse tool
 class BROMWrapper(Elaboratable):
-    def __init__(self, ROM_data, pipeline_reg):
+    def __init__(self, ROM_data, pipeline_reg = True):
         self.read_port = Signal(32)
         self.address = Signal(9)
         self.ROM_data = ROM_data
