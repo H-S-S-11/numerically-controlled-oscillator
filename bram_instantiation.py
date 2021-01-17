@@ -6,10 +6,10 @@ from nmigen_boards.ml505 import ML505Platform
 from nmigen_boards.test.blinky import *
 import itertools
 
-def get_xilinx_RAMB16(address, data_in, data_out, write_en, clk, rst, init_data=None):
+def get_xilinx_RAMB16(address, data_in, data_out, write_en, clk, rst, init_data=None, pipeline_reg=True):
     # 3 possible macros: SDP, TDP (simple/true dual port), SINGLE. start with single.
     bram = Instance("RAMB18SDP", 
-        p_DO_REG = 1,
+        p_DO_REG = int(pipeline_reg),
         #   each INIT_xx paramater represents a block of 8 words
         #   (BRAM is 32 bits wide without parity)
         #   MSB first in the parameter
@@ -28,18 +28,18 @@ def get_xilinx_RAMB16(address, data_in, data_out, write_en, clk, rst, init_data=
         )
     return bram
 
-
+# useful for making sure names don't clash and possibly confuse tool
 class BROMWrapper(Elaboratable):
-    def __init__(self, ROM_data):
+    def __init__(self, ROM_data, pipeline_reg):
         self.read_port = Signal(32)
         self.address = Signal(9)
         self.ROM_data = ROM_data
+        self.pipeline_reg = pipeline_reg
     def elaborate(self, platform):
         m = Module()
-        
         bram_prim = get_xilinx_RAMB16(self.address, Const(0, unsigned(32)), self.read_port, 
-            Const(0, unsigned(4)), ClockSignal(), ResetSignal(), init_data=self.ROM_data)
-        m.submodules += bram_prim
+            Const(0, unsigned(4)), ClockSignal(), ResetSignal(), init_data=self.ROM_data, pipeline_reg=self.pipeline_reg)
+        m.submodules.__brom_0 = bram_prim
         return m
 
 class BRAMTest(Elaboratable):

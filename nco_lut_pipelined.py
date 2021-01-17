@@ -1,5 +1,6 @@
 from nmigen import *
 from nmigen.sim import *
+from bram_instantiation import *
 import math
 
 def gen_lookup(entry, input_width, output_width, signed_output=True):
@@ -18,42 +19,30 @@ def calc_phi_inc(desired_freq, clock_freq):
     ratio = desired_freq/(clock_freq/2)
     return int(ratio*max_inc)
 
-def twos_complement_hex(decimal, bits):
+def twos_complement(decimal, bits):
     if(decimal >= 0):
-        result =  hex(decimal)[2:]
-        while len(result) < bits/4:
-            result = "0" + result
-        return result
+        return decimal
     else:
         inverted = 2**bits + decimal
-        return twos_complement_hex(inverted, bits)
+        return twos_complement(inverted, bits)
 
-def generate_init_file(file, data_width, addr_width, signed_output = True):
-    with open(file, "w") as mem_out:
-        mem_out.write('@00000000\n')
-        for n in range(0, 512):
-            decimal = gen_lookup(n, addr_width, data_width, signed_output=signed_output)
-            hex_out = twos_complement_hex(decimal, 32)
-            mem_out.write('0' + hex_out + '\n')
+
+def generate_init_data(data_width, addr_width, signed_output = True):
+    init_data = {}
+    for line in range(0, 64):  # 64 for 18k BRAM
+        init_line = 0
+        for word in range(0, 8):
+            decimal = gen_lookup((line*8 + word), addr_width, data_width, signed_output=signed_output)
+            if signed_output:
+                decimal = twos_complement(decimal, data_width)
+            init_line += (decimal << word*32)
+        line_string = str(hex(line)).upper()[2:]
+        while len(line_string) < 2:
+            line_string = '0' + line_string
+        init_data['p_INIT_'+ line_string] = init_line
+    return init_data
  
-def get_xilinx_RAMB16(init_file, address, data_in, data_out, write_en, clk, rst):
-    # 3 possible macros: SDP, TDP (simple/true dual port), SINGLE. start with single.
-    bram = Instance("RAMB18SDP", 
-        p_DO_REG = 1,
-        p_INIT_FILE=init_file,
-        o_DO = data_out,
-        i_WRADDR = address,
-        i_RDADDR = address,
-        i_WRCLK = clk,
-        i_RDCLK = clk,
-        i_DI = data_in,
-        i_RDEN = Signal(1, reset=1),
-        i_WREN = 0,
-        i_REGCE = Signal(1, reset=1),
-        i_SSR = 0,
-        i_WE = write_en,
-        )
-    return bram
+
 
 class NCO_LUT_Pipelined(Elaboratable):
     def __init__(self, output_width=8, sin_input_width=None, signed_output=True):
@@ -84,11 +73,14 @@ class NCO_LUT_Pipelined(Elaboratable):
         table_entry = Signal(input_width)
         m.d.comb += table_entry.eq(phi[32-input_width:32])
 
-        generate_init_file("./build/mem_init.mem", 8, 8)
-        read_port = Signal(32)
-        bram = get_xilinx_RAMB16("mem_init.mem", Cat(table_entry, Signal(1)), Signal(32), read_port, Signal(4), ClockSignal(), ResetSignal())
-        m.submodules += bram
-        m.d.comb += sin_o.eq(read_port[0:8])
+        init = generate_init_data(self.output_width, self.sin_input_width)
+       
+        brom = BROMWrapper(init)
+        m.submodules.brom = brom
+        m.d.comb += [
+            sin_o.eq(brom.read_port[0:output_width]),
+            brom.address.eq(table_entry),
+        ]
 
         return m
 
