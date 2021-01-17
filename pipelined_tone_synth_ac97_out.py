@@ -21,7 +21,7 @@ class Tone_synth(Elaboratable):
 
         self.count_resolution = count_resolution
         if audio_resolution==None:
-            self.audio_resolution = resolution
+            self.audio_resolution = count_resolution
         else:
             self.audio_resolution = audio_resolution
             
@@ -31,8 +31,7 @@ class Tone_synth(Elaboratable):
         m.submodules.nco_1 = self.nco_1 = nco_1 = NCO_LUT_Pipelined(output_width=self.audio_resolution, 
             sin_input_width=self.count_resolution)
         m.submodules.ac97 = self.ac97 = ac97 = AC97_Controller()
-        m.submodules.pwm = self.pwm = pwm = PWM(resolution = self.audio_resolution)
-
+ 
         if(platform != None):
             
             ac97_if = platform.request("audio_codec", 
@@ -47,24 +46,12 @@ class Tone_synth(Elaboratable):
             audio_clk = platform.request("audio_bit_clk")
             m.d.comb += ClockSignal("audio_bit_clk").eq(audio_clk)
    
-       
-            platform.add_resources([
-                Resource("pwm", 0,
-                    Pins("2", conn=("gpio", 0), dir ="o" ), 
-                    Attrs(IOSTANDARD="LVCMOS33")
-                    ),
-            ])
-            self.pwm_o = platform.request("pwm")
-
             
         zero=Signal(20-self.audio_resolution)
         m.d.comb += [
             nco_1.phi_inc_i.eq(self.phi_inc_2),
             ac97.dac_channels_i.dac_left_front.eq(Cat(zero, nco_1.sine_wave_o)),
             ac97.dac_channels_i.dac_right_front.eq(Cat(zero, nco_1.sine_wave_o)),
-            pwm.input_value_i.eq(nco_1.sine_wave_o),
-            pwm.write_enable_i.eq(0),
-            self.pwm_o.o.eq(pwm.pwm_o),
         ]
 
         return m
