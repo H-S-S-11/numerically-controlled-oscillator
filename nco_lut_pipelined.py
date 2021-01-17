@@ -36,28 +36,6 @@ def generate_init_file(file, data_width, addr_width, signed_output = True):
             hex_out = twos_complement_hex(decimal, 32)
             mem_out.write('0' + hex_out + '\n')
  
-
-def get_xilinx_bram(init_file, address, data_in, data_out, write_en, clk, rst):
-    # 3 possible macros: SDP, TDP (simple/true dual port), SINGLE. start with single.
-    bram = Instance("BRAM_SINGLE_MACRO", 
-        p_BRAM_SIZE="18Kb",
-        p_DEVICE="VIRTEX5",
-        p_DO_REG = 1,
-        p_INIT_FILE=init_file,
-        p_WRITE_MODE="READ_FIRST",
-        p_WRITE_WIDTH = 8,
-        p_READ_WIDTH = 8,
-        o_DO = data_out,
-        i_ADDR = address,
-        i_CLK = clk,
-        i_DI = data_in,
-        i_EN = 1,
-        i_REGCE = 1,
-        i_RST = rst,
-        i_WE = write_en,
-        )
-    return bram
-
 def get_xilinx_RAMB16(init_file, address, data_in, data_out, write_en, clk, rst):
     # 3 possible macros: SDP, TDP (simple/true dual port), SINGLE. start with single.
     bram = Instance("RAMB18SDP", 
