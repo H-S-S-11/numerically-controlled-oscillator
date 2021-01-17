@@ -2,17 +2,18 @@ from nmigen import *
 from nmigen.back.pysim import *
 
 class PWM(Elaboratable):
-    def __init__(self, resolution = 8):
+    def __init__(self, resolution = 8, no_reset = True):
         self.input_value_i = Signal(resolution)
         self.write_enable_i = Signal()
         self.pwm_o = Signal(reset = 1)
 
         self.resolution = resolution
+        self.no_reset = no_reset        
 
     def elaborate(self, platform):
         m = Module()
 
-        count = Signal(self.resolution)
+        count = Signal(self.resolution, reset_less=self.no_reset)
         input_value = Signal(self.resolution)
         m.d.sync += count.eq(count + 1)
 
