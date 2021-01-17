@@ -6,14 +6,15 @@ from nmigen_boards.ml505 import ML505Platform
 from nmigen_boards.test.blinky import *
 import itertools
 
-def get_xilinx_RAMB16(init_file, address, data_in, data_out, write_en, clk, rst):
+def get_xilinx_RAMB16(init_file, address, data_in, data_out, write_en, clk, rst, init_data):
     # 3 possible macros: SDP, TDP (simple/true dual port), SINGLE. start with single.
     bram = Instance("RAMB18SDP", 
         p_DO_REG = 1,
-        o_DO = data_out,
         #   each INIT_xx paramater represents a block of 8 words
         #   (BRAM is 32 bits wide without parity)
         #   MSB first in the parameter
+        **init_data,
+        o_DO = data_out,              
         i_WRADDR = address,
         i_RDADDR = address,
         i_WRCLK = clk,
@@ -34,7 +35,9 @@ class BRAMWrapper(Elaboratable):
         self.address = Signal(9)
     def elaborate(self, platform):
         m = Module()
-        bram_prim = get_xilinx_RAMB16("mem_init.mem", self.address, Const(0, unsigned(32)), self.read_port, Signal(4), ClockSignal(), ResetSignal())
+        init = { 'p_INIT_00':Const(10, unsigned(256)) }
+        bram_prim = get_xilinx_RAMB16("mem_init.mem", self.address, Const(0, unsigned(32)),
+            self.read_port, Const(0, unsigned(4)), ClockSignal(), ResetSignal(), init)
         m.submodules += bram_prim
         return m
 
