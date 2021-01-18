@@ -11,6 +11,7 @@ class FIR_Pipelined(Elaboratable):
         self.coefficients = []
         for n in range(0, taps):
             self.coefficients.append(round(fir_coeff[n]))
+        self.coefficients.append(0)
 
         if(width*2 > macc_width):
             raise ValueError('MACC width must be at least 2*sample width')
@@ -23,7 +24,7 @@ class FIR_Pipelined(Elaboratable):
         self.macc_width = macc_width
         self.width = width
         self.sample = Shape(width=self.width, signed=True)
-        self.taps = len(self.coefficients)
+        self.taps = len(self.coefficients)-1
         self.latency = self.taps + 3    # min. number of clock cycles per sample
 
         self.input = Signal(shape = self.sample) 
@@ -35,8 +36,7 @@ class FIR_Pipelined(Elaboratable):
         m = Module()
 
         sample_count = Signal(math.ceil(math.log2(self.taps)))
-        accumulator = Signal(shape = Shape(width=self.macc_width, signed=True))
-
+        reset_acc = Signal()
         multiplicand1 = Signal(shape = self.sample) 
         multiplicand2 = Signal(shape = self.sample) 
 
@@ -45,41 +45,58 @@ class FIR_Pipelined(Elaboratable):
 
         m.d.comb += [
             multiplicand1.eq(samples[sample_count]),
+            reset_acc.eq(0)
         ]
 
         with m.Switch(sample_count):
-            for n in range(0, self.taps):
+            for n in range(0, self.taps+1):
                 with m.Case(n):
                     m.d.comb += multiplicand2.eq(self.coefficients[n])
-            
 
-        m.d.sync += [
-            self.output_ready_o.eq(0),
-            accumulator.eq(accumulator + (multiplicand1*multiplicand2)),
-        ]
+        accumulator = Signal(shape = Shape(width=self.macc_width, signed=True)) 
+        if platform == None:
+            m.d.sync += [
+                self.output_ready_o.eq(0),
+                accumulator.eq(accumulator + (multiplicand1*multiplicand2)),
+            ]
+            with m.If(reset_acc):
+                m.d.sync += accumulator.eq(0)
+        else:
+            with open('inferred_mult.v') as f:
+                platform.add_file('inferred_mult.v', f)
+            m.submodules.dsp = Instance(
+                'dsp48e_macc_latency1_16bit',
+                i_clk = ClockSignal(),
+                i_rst_sync = reset_acc,
+                i_a = multiplicand1,
+                i_b = multiplicand2,
+                o_accumulator = accumulator
+            )
 
         with m.FSM() as fir_fsm:
             with m.State("WAIT"):
                 m.next = "WAIT"
-                m.d.sync += accumulator.eq(0)   
+                m.d.comb += reset_acc.eq(1) 
                 with m.If(self.input_ready_i):
                     m.next = "LOAD"           
 
             with m.State("LOAD"):
                 m.next = "PROCESSING"
+                m.d.sync += samples[0].eq(self.input)  
                 for i in range(1, self.taps):
                         m.d.sync += samples[i].eq(samples[i-1])
-                m.d.sync += [
-                    accumulator.eq(0),
-                    samples[0].eq(self.input),                    
-                ]
+                m.d.comb += reset_acc.eq(1)                                 
 
             with m.State("PROCESSING"):
                 m.next = "PROCESSING"
                 m.d.sync += sample_count.eq(sample_count+1) 
                 with m.If(sample_count==(self.taps-1)):
-                    m.d.sync += sample_count.eq(0)
-                    m.next = "SAVE"
+                    m.next = "PIPELINE_CLEAR"
+            
+            with m.State("PIPELINE_CLEAR"):
+                # wait as many clock cycles as needed for the pipeline in DSP to finish then
+                m.d.sync += sample_count.eq(0)
+                m.next = "SAVE"
 
             with m.State("SAVE"):
                 m.next = "WAIT"
@@ -140,7 +157,7 @@ if __name__=="__main__":
     
     if(not freq_response):
 
-        dut = FIR_Pipelined(width=18, macc_width=48,
+        dut = FIR_Pipelined(width=16, macc_width=48,
         taps=33, cutoff=0.5, filter_type='lowpass')
         sim = Simulator(dut)
         sim.add_clock(10e-9) #100MHz
