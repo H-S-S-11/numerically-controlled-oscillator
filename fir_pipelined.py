@@ -38,7 +38,7 @@ class FIR_Pipelined(Elaboratable):
         accumulator = Signal(shape = Shape(width=self.macc_width, signed=True))
 
         multiplicand1 = Signal(shape = self.sample) 
-        multiplicand2 = Signal(shape = self.sample, attrs={'signed':1}) 
+        multiplicand2 = Signal(shape = self.sample) 
 
         samples = Memory(width=self.width, depth=self.taps, 
             name = "samples")
