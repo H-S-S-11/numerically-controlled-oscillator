@@ -31,8 +31,8 @@ class Tone_synth_loopback(Elaboratable):
         m.submodules.nco = self.nco = nco = NCO_LUT(output_width= self.pwm_resolution, sin_input_width=self.resolution)
         m.submodules.ac97 = self.ac97 = ac97 = AC97_Controller()
         m.submodules.pwm = self.pwm = pwm = PWM(resolution = self.pwm_resolution)
-        m.submodules.fir = fir = FIR_Pipelined(width=16, taps=16, cutoff=0.4,
-            filter_type='lowpass', macc_width=36)
+        m.submodules.fir = fir = FIR_Pipelined(width=16, taps=17, cutoff=0.45, #10kHz Hz at 44k Fs
+            filter_type='highpass', macc_width=48)
     
         if(platform != None):
 
@@ -43,14 +43,6 @@ class Tone_synth_loopback(Elaboratable):
                     ),
             ])
             self.pwm_o = platform.request("pwm")
-
-            platform.add_resources([
-                Resource("load", 0,
-                    Pins("6", conn=("gpio", 0), dir ="o" ), 
-                    Attrs(IOSTANDARD="LVCMOS33")
-                    ),
-            ])
-            self.load_o = platform.request("load")
 
             #Get the clock from the codec
             m.domains.audio_bit_clk = ClockDomain()
@@ -76,8 +68,7 @@ class Tone_synth_loopback(Elaboratable):
             fir.input_ready_i.eq(ac97.adc_sample_received),
             ac97.dac_channels_i.dac_left_front.eq(fir.output),
             ac97.dac_channels_i.dac_right_front.eq(fir.output),
-            self.pwm_o.o.eq(pwm.pwm_o),   
-            self.load_o.o.eq(ac97.adc_sample_received),   
+            self.pwm_o.o.eq(pwm.pwm_o),     
         ]
 
         return m

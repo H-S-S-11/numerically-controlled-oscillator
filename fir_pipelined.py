@@ -31,25 +31,26 @@ class FIR_Pipelined(Elaboratable):
 
         sample_count = Signal(math.ceil(math.log2(self.taps)))
         accumulator = Signal(shape = Shape(width=self.macc_width, signed=True))
-        multiply_result = Signal(shape = Shape(width=self.macc_width, signed=True))
 
         multiplicand1 = Signal(shape = self.sample) 
-        multiplicand2 = Signal(shape = self.sample) 
+        multiplicand2 = Signal(shape = self.sample, attrs={'signed':1}) 
 
-        coefficients = Memory(width=self.width, depth=self.taps, 
-            init=self.coefficients, name="coefficients")
         samples = Memory(width=self.width, depth=self.taps, 
             name = "samples")
 
         m.d.comb += [
-            multiply_result.eq(multiplicand1*multiplicand2),
             multiplicand1.eq(samples[sample_count]),
-            multiplicand2.eq(coefficients[sample_count]),
         ]
+
+        with m.Switch(sample_count):
+            for n in range(0, self.taps):
+                with m.Case(n):
+                    m.d.comb += multiplicand2.eq(self.coefficients[n])
+            
 
         m.d.sync += [
             self.output_ready_o.eq(0),
-            accumulator.eq(accumulator + multiply_result),
+            accumulator.eq(accumulator + (multiplicand1*multiplicand2)),
         ]
 
         with m.FSM() as fir_fsm:
@@ -86,7 +87,7 @@ class FIR_Pipelined(Elaboratable):
 
 if __name__=="__main__":
 
-    freq_response = True
+    freq_response = False
     
     
 
@@ -101,9 +102,9 @@ if __name__=="__main__":
     def input_signal(t):
         # frequency is (w/pi) MHz
         # max w is pi. (represents nyquist rate). default filter cutoff is 1.57
-        w1 = 0.2
+        w1 = 0.5
         w2 = 1
-        return ( math.sin(w1*t) + math.sin(w2*t) )/2
+        return ( math.sin(w1*t) + 0*math.sin(w2*t) )
 
     def tb():
         yield dut.input.eq(2**15 -1)    # calibrate waves for gtkwave
@@ -137,7 +138,7 @@ if __name__=="__main__":
     if(not freq_response):
 
         dut = FIR_Pipelined(width=18, macc_width=48,
-        taps=33, cutoff=0.1, filter_type='highpass')
+        taps=33, cutoff=0.5, filter_type='lowpass')
         sim = Simulator(dut)
         sim.add_clock(10e-9) #100MHz
         sim.add_sync_process(clock)
