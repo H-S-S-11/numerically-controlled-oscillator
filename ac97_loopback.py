@@ -10,9 +10,10 @@ from nmigen_boards.ml505 import ML505Platform
 
 from nco_lut import *
 from pwm import *
+from fir_pipelined import *
 from ac97_controller import AC97_Controller
 
-class Tone_synth(Elaboratable):
+class Tone_synth_loopback(Elaboratable):
     def __init__(self, tone_frequency=440, clk_frequency=100000000, resolution = 6, pwm_resolution=None):
         self.pwm_o = Pin(1, "o")
 
@@ -30,6 +31,8 @@ class Tone_synth(Elaboratable):
         m.submodules.nco = self.nco = nco = NCO_LUT(output_width= self.pwm_resolution, sin_input_width=self.resolution)
         m.submodules.ac97 = self.ac97 = ac97 = AC97_Controller()
         m.submodules.pwm = self.pwm = pwm = PWM(resolution = self.pwm_resolution)
+        m.submodules.fir = fir = FIR_Pipelined(width=16, taps=16, cutoff=0.4,
+            filter_type='lowpass', macc_width=36)
     
         if(platform != None):
 
@@ -67,8 +70,12 @@ class Tone_synth(Elaboratable):
             nco.phi_inc_i.eq(self.phi_inc),
             pwm.input_value_i.eq(nco.sine_wave_o),
             pwm.write_enable_i.eq(0),
-            ac97.dac_channels_i.dac_left_front.eq(ac97.adc_channels_o.adc_left),
-            ac97.dac_channels_i.dac_right_front.eq(ac97.adc_channels_o.adc_right),
+            #ac97.dac_channels_i.dac_left_front.eq(ac97.adc_channels_o.adc_left),
+            #ac97.dac_channels_i.dac_right_front.eq(ac97.adc_channels_o.adc_right),
+            fir.input.eq(ac97.adc_channels_o.adc_left[4:20]),
+            fir.input_ready_i.eq(ac97.adc_sample_received),
+            ac97.dac_channels_i.dac_left_front.eq(fir.output),
+            ac97.dac_channels_i.dac_right_front.eq(fir.output),
             self.pwm_o.o.eq(pwm.pwm_o),   
             self.load_o.o.eq(ac97.adc_sample_received),   
         ]
@@ -77,7 +84,7 @@ class Tone_synth(Elaboratable):
 
 if __name__ == "__main__":
   
-    tone = Tone_synth(resolution = 6, clk_frequency=100000000)
+    tone = Tone_synth_loopback(resolution = 6, clk_frequency=100000000)
 
     if sys.argv[1] == "convert":
         path = "tone_synth_outputs"

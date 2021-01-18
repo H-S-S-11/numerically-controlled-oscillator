@@ -50,6 +50,7 @@ def ac97_adc_connect(domain, source, sink):
     ]
 
 class AC97_Controller(Elaboratable):
+    # 
     def __init__(self):
         #AC97 signals
         self.sdata_in = Pin(width=1, dir="i", xdr = 2)
@@ -64,7 +65,7 @@ class AC97_Controller(Elaboratable):
         # signed pcm outputs from adc
         self.adc_channels_o = AC97_ADC_Channels(name="adc_channels_o")
         self.adc_out_valid = Signal()           # indicates the window in which  the adc_ outputs can be read
-        self.adc_sample_received = Signal()
+        self.adc_sample_received = Signal()     # asserted for one cycle when acd_out becomes valid
 
     def elaborate(self, platform):
         m = Module()
