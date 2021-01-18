@@ -28,11 +28,13 @@ class FIR_test(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        m.submodules.nco = self.nco = nco = NCO_LUT(output_width= self.resolution, 
+        m.submodules.nco = self.nco = nco = NCO_LUT(output_width= self.resolution-1, 
+            sin_input_width=8, signed_output=True)
+        m.submodules.nco2 = nco2 = NCO_LUT(output_width= self.resolution-1, 
             sin_input_width=8, signed_output=True)
         m.submodules.pwm = self.pwm = pwm = PWM(resolution = self.pwm_resolution)
-        m.submodules.fir = fir = FIR_Pipelined(width=16, taps = 23, cutoff=0.45, #10kHz at 44k Fs
-            filter_type='highpass', macc_width=32, output_width=20)
+        m.submodules.fir = fir = FIR_Pipelined(width=16, taps = 23, cutoff=[0.045, 0.25], #1kHz at 44k Fs
+            filter_type='bandpass', macc_width=32, output_width=8)
         # m.submodules.ac97 = self.ac97 = ac97 = AC97_Controller()
         
 
@@ -41,7 +43,7 @@ class FIR_test(Elaboratable):
         pwm_val = Signal(8)
         m.d.comb += [
             sample.eq(0),
-            pwm_val.eq(fir.output[12:20] + 128),
+            pwm_val.eq(fir.output + 128),
         ]
         m.d.sync += div_2000.eq(div_2000-1)
         with m.If(~div_2000.any()):
@@ -72,7 +74,8 @@ class FIR_test(Elaboratable):
 
         m.d.comb += [
             nco.phi_inc_i.eq(self.phi_inc),
-            fir.input.eq(nco.sine_wave_o),
+            nco2.phi_inc_i.eq(self.phi_inc*8),
+            fir.input.eq(nco.sine_wave_o + nco2.sine_wave_o),
             fir.input_ready_i.eq(sample),
             #ac97.dac_channels_i.dac_left_front.eq(fir.output),
             #ac97.dac_channels_i.dac_right_front.eq(fir.output),
