@@ -58,8 +58,8 @@ class FIR_test(Elaboratable):
             ])
             self.pwm_o = platform.request("pwm")
 
-            ac97_if = platform.request("audio_codec", 
-                xdr={"sdata_in":2, "sdata_out":0, "audio_sync":0, "reset_o":0})
+            #ac97_if = platform.request("audio_codec", 
+            #    xdr={"sdata_in":2, "sdata_out":0, "audio_sync":0, "reset_o":0})
             #ac97.sdata_in = ac97_if.sdata_in
             #ac97.sdata_out = ac97_if.sdata_out
             #ac97.sync_o = ac97_if.audio_sync
