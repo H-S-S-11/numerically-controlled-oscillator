@@ -15,8 +15,8 @@ class FIR_Pipelined(Elaboratable):
 
         if(width*2 > macc_width):
             raise ValueError('MACC width must be at least 2*sample width')
-        if((width*2 + math.ceil(math.log2(taps))) >= macc_width):
-            print("Warning! Possible insufficient guard bits, potential MACC overflow!")
+        #if((width*2 + math.ceil(math.log2(taps))) >= macc_width):
+        #    print("Warning! Possible insufficient guard bits, potential MACC overflow!")
         if output_width == None:
             self.output_width = width
         else:
@@ -47,18 +47,17 @@ class FIR_Pipelined(Elaboratable):
             multiplicand1.eq(samples[sample_count]),
             reset_acc.eq(0)
         ]
+        m.d.sync += self.output_ready_o.eq(0)
 
         with m.Switch(sample_count):
             for n in range(0, self.taps+1):
                 with m.Case(n):
                     m.d.comb += multiplicand2.eq(self.coefficients[n])
 
-        accumulator = Signal(shape = Shape(width=self.macc_width, signed=True)) 
-        if platform == None:
-            m.d.sync += [
-                self.output_ready_o.eq(0),
-                accumulator.eq(accumulator + (multiplicand1*multiplicand2)),
-            ]
+        accumulator = Signal(shape = Shape(width=self.macc_width, signed=True))
+        fabric_multiply = False 
+        if ((platform == None) or fabric_multiply):
+            m.d.sync += accumulator.eq(accumulator + (multiplicand1*multiplicand2))
             with m.If(reset_acc):
                 m.d.sync += accumulator.eq(0)
         else:
@@ -102,7 +101,7 @@ class FIR_Pipelined(Elaboratable):
                 m.next = "WAIT"
                 m.d.sync += [
                     self.output_ready_o.eq(1),
-                    self.output.eq(accumulator[self.output_width:self.output_width*2]),
+                    self.output.eq(accumulator[32-self.output_width:32]),
                 ]                
 
         return m

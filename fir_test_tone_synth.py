@@ -31,8 +31,8 @@ class FIR_test(Elaboratable):
         m.submodules.nco = self.nco = nco = NCO_LUT(output_width= self.resolution, 
             sin_input_width=8, signed_output=True)
         m.submodules.pwm = self.pwm = pwm = PWM(resolution = self.pwm_resolution)
-        m.submodules.fir = fir = FIR_Pipelined(width=16, taps = 11, cutoff=0.45, #10kHz at 44k Fs
-            filter_type='highpass', macc_width=48, output_width=20)
+        m.submodules.fir = fir = FIR_Pipelined(width=16, taps = 23, cutoff=0.45, #10kHz at 44k Fs
+            filter_type='highpass', macc_width=32, output_width=20)
         # m.submodules.ac97 = self.ac97 = ac97 = AC97_Controller()
         
 
@@ -41,7 +41,7 @@ class FIR_test(Elaboratable):
         pwm_val = Signal(8)
         m.d.comb += [
             sample.eq(0),
-            pwm_val.eq(fir.output[8:16] + 128),
+            pwm_val.eq(fir.output[12:20] + 128),
         ]
         m.d.sync += div_2000.eq(div_2000-1)
         with m.If(~div_2000.any()):
@@ -108,6 +108,6 @@ if __name__ == "__main__":
         
 
         with sim.write_vcd("pwm_fir_waves.vcd"):
-            sim.run_until(5e-4, run_passive=True)
+            sim.run_until(1e-3, run_passive=True)
     
    
