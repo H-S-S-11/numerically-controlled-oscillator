@@ -4,7 +4,8 @@ import math
 from scipy import signal
 
 class FIR_Pipelined(Elaboratable):
-    def __init__(self, width = 16, taps=16, cutoff=0.5, filter_type='lowpass', macc_width=32):
+    def __init__(self, width = 16, taps=16, cutoff=0.5, filter_type='lowpass', 
+        output_width = None, macc_width=32):
  
         fir_coeff = (signal.firwin(taps, cutoff, pass_zero=filter_type)*2**(width-1))
         self.coefficients = []
@@ -15,6 +16,10 @@ class FIR_Pipelined(Elaboratable):
             raise ValueError('MACC width must be at least 2*sample width')
         if((width*2 + math.ceil(math.log2(taps))) >= macc_width):
             print("Warning! Possible insufficient guard bits, potential MACC overflow!")
+        if output_width == None:
+            self.output_width = width
+        else:
+            self.output_width = output_width
         self.macc_width = macc_width
         self.width = width
         self.sample = Shape(width=self.width, signed=True)
@@ -23,7 +28,7 @@ class FIR_Pipelined(Elaboratable):
 
         self.input = Signal(shape = self.sample) 
         self.input_ready_i = Signal()
-        self.output = Signal(shape = self.sample) 
+        self.output = Signal(signed(self.output_width)) 
         self.output_ready_o = Signal()        
 
     def elaborate(self, platform):
@@ -80,7 +85,7 @@ class FIR_Pipelined(Elaboratable):
                 m.next = "WAIT"
                 m.d.sync += [
                     self.output_ready_o.eq(1),
-                    self.output.eq(accumulator[self.width:self.width*2]),
+                    self.output.eq(accumulator[self.output_width:self.output_width*2]),
                 ]                
 
         return m
@@ -89,8 +94,6 @@ if __name__=="__main__":
 
     freq_response = False
     
-    
-
     def clock():
         while True:
             yield

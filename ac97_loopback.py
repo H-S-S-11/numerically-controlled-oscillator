@@ -31,7 +31,7 @@ class Tone_synth_loopback(Elaboratable):
         m.submodules.nco = self.nco = nco = NCO_LUT(output_width= self.pwm_resolution, sin_input_width=self.resolution)
         m.submodules.ac97 = self.ac97 = ac97 = AC97_Controller()
         m.submodules.pwm = self.pwm = pwm = PWM(resolution = self.pwm_resolution)
-        m.submodules.fir = fir = FIR_Pipelined(width=16, taps=17, cutoff=0.45, #10kHz Hz at 44k Fs
+        m.submodules.fir = fir = FIR_Pipelined(width=16, taps=33, cutoff=0.45, #10kHz Hz at 44k Fs
             filter_type='highpass', macc_width=48)
     
         if(platform != None):
@@ -57,7 +57,8 @@ class Tone_synth_loopback(Elaboratable):
             ac97.sdata_out = ac97_if.sdata_out
             ac97.sync_o = ac97_if.audio_sync
             ac97.reset_o = ac97_if.flash_audio_reset_b
-  
+
+        zero = Const(0, unsigned(4))
         m.d.comb += [
             nco.phi_inc_i.eq(self.phi_inc),
             pwm.input_value_i.eq(nco.sine_wave_o),
@@ -66,8 +67,8 @@ class Tone_synth_loopback(Elaboratable):
             #ac97.dac_channels_i.dac_right_front.eq(ac97.adc_channels_o.adc_right),
             fir.input.eq(ac97.adc_channels_o.adc_left[4:20]),
             fir.input_ready_i.eq(ac97.adc_sample_received),
-            ac97.dac_channels_i.dac_left_front.eq(fir.output),
-            ac97.dac_channels_i.dac_right_front.eq(fir.output),
+            ac97.dac_channels_i.dac_left_front.eq( Cat(zero, fir.output) ),
+            ac97.dac_channels_i.dac_right_front.eq( Cat(zero, fir.output) ),
             self.pwm_o.o.eq(pwm.pwm_o),     
         ]
 

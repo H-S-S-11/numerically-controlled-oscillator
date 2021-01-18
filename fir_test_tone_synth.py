@@ -11,6 +11,7 @@ from nmigen_boards.ml505 import ML505Platform
 from nco_lut import *
 from fir_pipelined import *
 from pwm import PWM
+from ac97_controller import *
 
 class FIR_test(Elaboratable):
     def __init__(self, tone_frequency=440, clk_frequency=100000000, resolution = 8, pwm_resolution=None):
@@ -30,8 +31,10 @@ class FIR_test(Elaboratable):
         m.submodules.nco = self.nco = nco = NCO_LUT(output_width= self.resolution, 
             sin_input_width=8, signed_output=True)
         m.submodules.pwm = self.pwm = pwm = PWM(resolution = self.pwm_resolution)
-        m.submodules.fir = fir = FIR_Pipelined(width=16, taps = 17, cutoff=0.2, #5kHz at 50k Fs
-            filter_type='lowpass', macc_width=48)
+        m.submodules.fir = fir = FIR_Pipelined(width=16, taps = 33, cutoff=0.0045, #100Hz at 44k Fs
+            filter_type='lowpass', macc_width=48, output_width=20)
+        m.submodules.ac97 = self.ac97 = ac97 = AC97_Controller()
+        
 
         div_2000 = Signal(range(0, 2000))
         sample = Signal()
@@ -55,16 +58,29 @@ class FIR_test(Elaboratable):
             ])
             self.pwm_o = platform.request("pwm")
 
+            ac97_if = platform.request("audio_codec", 
+                xdr={"sdata_in":2, "sdata_out":0, "audio_sync":0, "reset_o":0})
+            ac97.sdata_in = ac97_if.sdata_in
+            ac97.sdata_out = ac97_if.sdata_out
+            ac97.sync_o = ac97_if.audio_sync
+            ac97.reset_o = ac97_if.flash_audio_reset_b
+
+            #Get the clock from the codec
+            m.domains.audio_bit_clk = ClockDomain()
+            audio_clk = platform.request("audio_bit_clk")
+            m.d.comb += ClockSignal("audio_bit_clk").eq(audio_clk)
+
         m.d.comb += [
             nco.phi_inc_i.eq(self.phi_inc),
             fir.input.eq(nco.sine_wave_o),
-            fir.input_ready_i.eq(sample),
+            fir.input_ready_i.eq(ac97.adc_sample_received),
+            ac97.dac_channels_i.dac_left_front.eq(fir.output),
+            ac97.dac_channels_i.dac_right_front.eq(fir.output),
             pwm.input_value_i.eq(pwm_val),
             pwm.write_enable_i.eq(0),
             self.pwm_o.o.eq(pwm.pwm_o),
         ]
-
-
+        
         return m
 
 if __name__ == "__main__":
