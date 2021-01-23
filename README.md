@@ -1,4 +1,4 @@
 # numerically-controlled-oscillator
-nMigen implementation of an nco
+Started of with an nMigen implementation of an nco.
 
-Has become a more general repo for doing audio things with nMigen
+Has become a more general repo for doing audio/DSP things with nMigen
