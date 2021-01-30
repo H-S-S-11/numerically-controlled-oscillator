@@ -20,13 +20,14 @@ class PWM(Elaboratable):
         with m.If(self.write_enable_i):
             m.d.sync += input_value.eq(self.input_value_i)
 
-        with m.If(count.all()):
-            m.d.sync += [
-                self.pwm_o.eq(1),
-                input_value.eq(self.input_value_i),
-            ]
         with m.If(count == input_value):
             m.d.sync += self.pwm_o.eq(0)
+
+        with m.If(count.all()):
+            m.d.sync += [
+                self.pwm_o.eq(input_value.any()),   # Will be 1 unless desired duty cycle is 0%
+                input_value.eq(self.input_value_i),
+            ]       
 
         return m
 
