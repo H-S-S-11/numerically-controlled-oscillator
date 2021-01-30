@@ -3,15 +3,12 @@ from nmigen.sim import *
 import math
 
 def gen_lookup(entry, input_width, output_width, signed_output=True):
-    #map the inputs to a normal phase
+    # Map the integer phase input to a phase in radians
     phase = 2.0*math.pi*(entry/((2**input_width)-1))
-    if signed_output:
-        sin_phi = math.sin(phase)/2
-    else:
-        sin_phi = (math.sin(phase)+1)/2
-    #map the output to a range of uints
-    output = int((sin_phi)*((2**output_width)-1))
-    return output
+    # Calculate sine from phase
+    sin_phi = math.sin(phase)/2 if signed_output else (math.sin(phase)+1)/2
+    # Map the output to a range of uints
+    return int((sin_phi)*((2**output_width)-1))
 
 def calc_phi_inc(desired_freq, clock_freq):
     max_inc = (2**31)-1 #this would result in output frequency of fclk/2
