@@ -11,7 +11,7 @@ from nmigen_boards.ml505 import ML505Platform
 from nco_lut import *
 from fir_pipelined import *
 from pwm import PWM
-from ac97_controller import *
+from peripherals.ac97 import *
 
 class FIR_test(Elaboratable):
     def __init__(self, tone_frequency=440, clk_frequency=100000000, resolution = 8, pwm_resolution=None):

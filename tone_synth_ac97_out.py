@@ -9,7 +9,7 @@ from nmigen.lib.io import Pin
 from nmigen_boards.ml505 import ML505Platform
 
 from nco_lut import *
-from ac97_controller import AC97_Controller
+from peripherals.ac97 import AC97_Controller
 
 class Tone_synth(Elaboratable):
     def __init__(self, tone_frequency=440, clk_frequency=100000000, resolution = 10, pwm_resolution=None):

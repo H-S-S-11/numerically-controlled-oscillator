@@ -9,7 +9,7 @@ from nmigen.lib.io import Pin
 from nmigen_boards.ml505 import ML505Platform
 
 from nco_lut_pipelined import *
-from ac97_controller import AC97_Controller
+from peripherals.ac97 import AC97_Controller
 from pwm import PWM
 
 class Tone_synth(Elaboratable):
