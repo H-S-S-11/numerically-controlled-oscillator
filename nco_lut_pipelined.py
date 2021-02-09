@@ -1,6 +1,6 @@
 from nmigen import *
 from nmigen.sim import *
-from bram_instantiation import *
+from utility.bram_inst import *
 from nco_lut import *
 import math
 
