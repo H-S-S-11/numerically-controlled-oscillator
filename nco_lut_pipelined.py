@@ -3,28 +3,6 @@ from nmigen.sim import *
 from utility.bram_inst import *
 from nco_lut import *
 import math
-
-def twos_complement(decimal, bits):
-    if(decimal >= 0):
-        return decimal
-    else:
-        inverted = 2**bits + decimal
-        return twos_complement(inverted, bits)
-
-def generate_init_data(data_width, addr_width, signed_output = True):
-    init_data = {}
-    for line in range(0, 64):  # 64 for 18k BRAM
-        init_line = 0
-        for word in range(0, 8):
-            decimal = gen_lookup((line*8 + word), addr_width, data_width, signed_output=signed_output)
-            if signed_output:
-                decimal = twos_complement(decimal, data_width)
-            init_line += (decimal << word*32)
-        line_string = str(hex(line)).upper()[2:]
-        while len(line_string) < 2:
-            line_string = '0' + line_string
-        init_data['p_INIT_'+ line_string] = init_line
-    return init_data
  
 class NCO_LUT_Pipelined(Elaboratable):
     # Instantiates a BRAM with the data output register to achieve much higher frequencies than
@@ -55,7 +33,11 @@ class NCO_LUT_Pipelined(Elaboratable):
         m.d.sync += phi.eq(phi + self.phi_inc_i)        
         m.d.comb += table_entry.eq(phi[32-input_width:32])
 
-        init = generate_init_data(output_width, input_width)
+        init = []
+        for entry in range(0, 2**input_width):
+            init.append(gen_lookup(entry, input_width, output_width, signed_output=self.signed_output))
+        init = generate_init_data(16, init, signed_output=True)
+
         m.submodules.brom = brom = BROMWrapper(init)
         m.d.sync += [
             self.sine_wave_o.eq(brom.read_port[0:output_width]),
