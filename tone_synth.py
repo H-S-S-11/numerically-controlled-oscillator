@@ -60,6 +60,6 @@ if __name__ == "__main__":
         out.write(convert(tone, ports=[tone.pwm_o.o]))
 
     elif sys.argv[1] == "build":
-        ML505Platform().build(tone, do_build=False, do_program=False).execute_local(run_script=False)
-    
+        # ML505Platform().build(tone, do_build=False, do_program=False).execute_local(run_script=False)
+        ML505Platform().build(tone, do_program=False)
    
