@@ -31,8 +31,8 @@ class Tone_synth_loopback(Elaboratable):
         m.submodules.nco = self.nco = nco = NCO_LUT(output_width= self.pwm_resolution, sin_input_width=self.resolution)
         m.submodules.ac97 = self.ac97 = ac97 = AC97_Controller()
         m.submodules.pwm = self.pwm = pwm = PWM(resolution = self.pwm_resolution)
-        m.submodules.fir = fir = FIR_Pipelined(width=16, taps=33, cutoff=0.45, #10kHz Hz at 44k Fs
-            filter_type='highpass', macc_width=48)
+        m.submodules.fir = fir = FIR_Pipelined(width=16, taps=33, cutoff=0.22, #5kHz at 44k Fs
+            filter_type='lowpass', macc_width=48)
     
         if(platform != None):
 
@@ -42,6 +42,7 @@ class Tone_synth_loopback(Elaboratable):
                     Attrs(IOSTANDARD="LVCMOS33")
                     ),
             ])
+            
             self.pwm_o = platform.request("pwm")
 
             #Get the clock from the codec
@@ -61,14 +62,22 @@ class Tone_synth_loopback(Elaboratable):
         zero = Const(0, unsigned(4))
         m.d.comb += [
             nco.phi_inc_i.eq(self.phi_inc),
-            pwm.input_value_i.eq(nco.sine_wave_o),
+            # pwm.input_value_i.eq(nco.sine_wave_o),
+            pwm.input_value_i.eq(fir.output[10:16]),
             pwm.write_enable_i.eq(0),
+            
             #ac97.dac_channels_i.dac_left_front.eq(ac97.adc_channels_o.adc_left),
-            #ac97.dac_channels_i.dac_right_front.eq(ac97.adc_channels_o.adc_right),
-            fir.input.eq(ac97.adc_channels_o.adc_left[4:20]),
+            ac97.dac_channels_i.dac_right_front.eq(ac97.adc_channels_o.adc_right),
+            ac97.dac_channels_i.dac_right_surround.eq(ac97.adc_channels_o.adc_right),
+            
+            fir.input.eq(ac97.adc_channels_o.adc_right[4:20]),
             fir.input_ready_i.eq(ac97.adc_sample_received),
-            ac97.dac_channels_i.dac_left_front.eq( Cat(zero, fir.output) ),
-            ac97.dac_channels_i.dac_right_front.eq( Cat(zero, fir.output) ),
+
+            ac97.dac_channels_i.dac_left_front.eq(      Cat(zero, fir.output) ),
+            # ac97.dac_channels_i.dac_right_front.eq(     Cat(zero, fir.output) ),
+            ac97.dac_channels_i.dac_left_surround.eq(   Cat(zero, fir.output) ),
+            # ac97.dac_channels_i.dac_right_surround.eq(  Cat(zero, fir.output) ),
+
             self.pwm_o.o.eq(pwm.pwm_o),     
         ]
 
@@ -86,6 +95,6 @@ if __name__ == "__main__":
         out.write(convert(tone, ports=[tone.pwm_o.o]))
 
     elif sys.argv[1] == "build":
-        ML505Platform().build(tone, do_build=False, do_program=False).execute_local(run_script=False)
+        ML505Platform().build(tone, do_build=True, do_program=False)
     
    
