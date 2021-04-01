@@ -33,7 +33,7 @@ class FIR_test(Elaboratable):
         m.submodules.nco2 = nco2 = NCO_LUT(output_width= 6, 
             sin_input_width=6, signed_output=True)
         m.submodules.pwm = self.pwm = pwm = PWM(resolution = self.pwm_resolution)
-        m.submodules.fir = fir = FIR_Pipelined(width=7, taps = 23, cutoff=0.45, #10kHz at 44k Fs
+        m.submodules.fir = fir = FIR_Pipelined(width=7, taps = 23, cutoff=0.045, #1kHz at 44k Fs
             filter_type='lowpass', macc_width=32, output_width=7)
         m.submodules.ac97 = self.ac97 = ac97 = AC97_Controller()
         
@@ -75,7 +75,7 @@ class FIR_test(Elaboratable):
         zero = Signal(11)
         m.d.comb += [
             nco.phi_inc_i.eq(self.phi_inc),
-            nco2.phi_inc_i.eq(self.phi_inc*8),
+            nco2.phi_inc_i.eq(self.phi_inc*5),
             fir.input.eq(nco.sine_wave_o + nco2.sine_wave_o),
             fir.input_ready_i.eq(ac97.adc_sample_received),
             ac97.dac_channels_i.dac_left_front.eq(Cat(zero, fir.output)),
