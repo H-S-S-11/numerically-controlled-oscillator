@@ -30,7 +30,8 @@ class FIR_Pipelined(Elaboratable):
         self.input = Signal(shape = self.sample) 
         self.input_ready_i = Signal()
         self.output = Signal(signed(self.output_width)) 
-        self.output_ready_o = Signal()        
+        self.output_ready_o = Signal()  
+        self.accumulator = Signal(shape = Shape(width=self.macc_width, signed=True))      
 
     def elaborate(self, platform):
         m = Module()
@@ -54,7 +55,7 @@ class FIR_Pipelined(Elaboratable):
                 with m.Case(n):
                     m.d.comb += multiplicand2.eq(self.coefficients[n])
 
-        accumulator = Signal(shape = Shape(width=self.macc_width, signed=True))
+        accumulator = self.accumulator 
         fabric_multiply = False 
         if ((platform == None) or fabric_multiply):
             m.d.sync += accumulator.eq(accumulator + (multiplicand1*multiplicand2))
@@ -101,7 +102,7 @@ class FIR_Pipelined(Elaboratable):
                 m.next = "WAIT"
                 m.d.sync += [
                     self.output_ready_o.eq(1),
-                    self.output.eq(accumulator[32-self.output_width:32]),
+                    self.output.eq(accumulator[(2*self.width)-self.output_width:2*self.width]),
                 ]                
 
         return m
