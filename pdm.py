@@ -2,21 +2,21 @@ from nmigen import *
 from nmigen.sim import *
 
 class PDM(Elaboratable):
-    def __init__(self, bitwidth):
-        self.input = Signal(bitwidth)
+    def __init__(self, resolution):
+        self.input = Signal(resolution)
         self.pdm_out = Signal()
         self.write_en = Signal()
-        self.bitwidth = bitwidth
+        self.resolution = resolution
 
     def elaborate(self, platform):
         m = Module()
 
-        sum = Signal(self.bitwidth+1)
-        accumulator = Signal(self.bitwidth, reset_less=True)
-        input_reg = Signal(self.bitwidth)
+        sum = Signal(self.resolution+1)
+        accumulator = Signal(self.resolution, reset_less=True)
+        input_reg = Signal(self.resolution)
 
         m.d.sync += [
-            accumulator.eq(sum[0:self.bitwidth]),
+            accumulator.eq(sum[0:self.resolution]),
         ]
 
         with m.If(self.write_en):
@@ -24,15 +24,15 @@ class PDM(Elaboratable):
 
         m.d.comb += [
             sum.eq(input_reg+accumulator),
-            self.pdm_out.eq(sum[self.bitwidth])
+            self.pdm_out.eq(sum[self.resolution])
         ]
 
         return m
 
 if __name__=="__main__":
-    bitwidth = 7
+    resolution = 7
     periods = 1
-    dut = PDM(bitwidth)
+    dut = PDM(resolution)
 
     sim = Simulator(dut)
     sim.add_clock(10e-9) #100MHz
@@ -48,8 +48,8 @@ if __name__=="__main__":
         old_input = 0
         while True:            
             if (old_input != (yield dut.input)):
-                output = (2**bitwidth)*pulse_count/clock_count
-                print("input:", old_input, "   pulses per "+str(2**bitwidth)+" clocks=", output)
+                output = (2**resolution)*pulse_count/clock_count
+                print("input:", old_input, "   pulses per "+str(2**resolution)+" clocks=", output)
                 pulse_count = 0
                 clock_count = 0
             old_input = yield dut.input
@@ -60,7 +60,7 @@ if __name__=="__main__":
 
     def input_val():
         count = 0        
-        clocks = (2**bitwidth)*periods
+        clocks = (2**resolution)*periods
         yield
         yield dut.write_en.eq(1)
         #yield dut.input.eq(4)
@@ -68,7 +68,7 @@ if __name__=="__main__":
         #yield dut.input.eq(1)
         #yield
         #yield
-        for n in range(0, (2**bitwidth)):
+        for n in range(0, (2**resolution)):
             yield dut.input.eq(n)
             for clk in range(0, clocks):
                 yield
@@ -85,7 +85,7 @@ if __name__=="__main__":
     sim.add_sync_process(pulse_counter)
 
     with sim.write_vcd("PDM_waves.vcd"):
-        extra_time = periods*((2**bitwidth)**2)*10e-9
+        extra_time = periods*((2**resolution)**2)*10e-9
         print(extra_time)
         sim.run_until(1e-5+extra_time)
     
