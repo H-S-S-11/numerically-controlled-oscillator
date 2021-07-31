@@ -4,7 +4,7 @@ from nmigen.sim import *
 class PDM(Elaboratable):
     def __init__(self, resolution):
         self.input = Signal(resolution)
-        self.pdm_out = Signal()
+        self.pdm_out = Signal(reset_less=True)
         self.write_en = Signal()
         self.resolution = resolution
 
@@ -15,18 +15,18 @@ class PDM(Elaboratable):
         accumulator = Signal(self.resolution, reset_less=True)
         input_reg = Signal(self.resolution)
 
+        m.d.comb += [
+            sum.eq(input_reg+accumulator),            
+        ]
+
         m.d.sync += [
             accumulator.eq(sum[0:self.resolution]),
+            self.pdm_out.eq(sum[self.resolution])
         ]
 
         with m.If(self.write_en):
             m.d.sync += input_reg.eq(self.input)
-
-        m.d.comb += [
-            sum.eq(input_reg+accumulator),
-            self.pdm_out.eq(sum[self.resolution])
-        ]
-
+      
         return m
 
 if __name__=="__main__":
