@@ -40,6 +40,7 @@ class Tone_synth(Elaboratable):
                     ),
             ])
             self.pwm_o = platform.request("pwm")
+            dpad = platform.request("dpad")
 
         m.d.comb += [
             nco.phi_inc_i.eq(self.phi_inc),
@@ -48,8 +49,10 @@ class Tone_synth(Elaboratable):
             pdm.input.eq(nco.sine_wave_o),
             pdm.write_en.eq(1),
             #self.pwm_o.o.eq(pwm.pwm_o),
-            self.pwm_o.o.eq(pdm.pdm_out),
+            self.pwm_o.o.eq( Mux(dpad.c.i, pwm.pwm_o, pdm.pdm_out) ),
         ]
+
+        
 
 
         return m
