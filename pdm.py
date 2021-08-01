@@ -30,7 +30,7 @@ class PDM(Elaboratable):
         return m
 
 if __name__=="__main__":
-    resolution = 7
+    resolution = 4
     periods = 1
     dut = PDM(resolution)
 
@@ -40,23 +40,30 @@ if __name__=="__main__":
     def clock():
         while True:
             yield
+            #print("clock")
 
     def pulse_counter():
         pulse_count = 0
         clock_count = 0
         dut_input = 0
         old_input = 0
+        pulses_since_change = 0
         while True:            
-            if (old_input != (yield dut.input)):
+            if pulses_since_change == 2:
                 output = (2**resolution)*pulse_count/clock_count
-                print("input:", old_input, "   pulses per "+str(2**resolution)+" clocks=", output)
+                print("input:", dut_input, "   pulses per "+str(2**resolution)+" clocks=", output)
                 pulse_count = 0
-                clock_count = 0
+                clock_count = 0              
+            if (old_input != (yield dut.input)):
+                #print("change")
+                dut_input = old_input
+                pulses_since_change = 0          
             old_input = yield dut.input
             yield
             if (yield dut.pdm_out)==1:
                 pulse_count += 1
             clock_count += 1
+            pulses_since_change += 1
 
     def input_val():
         count = 0        
@@ -87,5 +94,5 @@ if __name__=="__main__":
     with sim.write_vcd("PDM_waves.vcd"):
         extra_time = periods*((2**resolution)**2)*10e-9
         print(extra_time)
-        sim.run_until(1e-5+extra_time)
+        sim.run_until(1e-6+extra_time)
     
