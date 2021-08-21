@@ -11,7 +11,7 @@ class SigmaDelta_ADC(Elaboratable):
         self.comparator = Signal()
         self.feedback = Signal()
         self.output = Signal( 1 + math.ceil(math.log2(k)) )
-        self.output_valid = Signal()
+        self.new_output = Signal()
         
         
         self.k = k
@@ -22,15 +22,20 @@ class SigmaDelta_ADC(Elaboratable):
         counter = Signal(shape=range(self.k))
         shift_in = Signal(self.k)
         adder_chain = [Signal(self.k, name="input_buffer")]
+        valid = Signal(int(math.log2(self.k))+1)
 
         m.d.sync += [
             self.feedback.eq(self.comparator),
             counter.eq(counter+1),
             shift_in.eq(Cat(self.comparator, shift_in)),
+            valid.eq(Cat(0, valid))
         ]
 
         with m.If(counter==0):
-            m.d.sync += adder_chain[0].eq(shift_in)
+            m.d.sync += [
+                adder_chain[0].eq(shift_in),
+                valid.eq(1),
+            ]
 
         for i in range(1, int(math.log2(self.k)+1)):
             adder_chain.append([])
@@ -38,9 +43,10 @@ class SigmaDelta_ADC(Elaboratable):
                 adder_chain[i].append( Signal(1+i, name="adder_chain_"+str(i-1)+"_"+str(n)) )
                 m.d.sync += adder_chain[i][n].eq(adder_chain[i-1][2*n]+adder_chain[i-1][2*n+1])
         
-        m.d.comb += self.output.eq(adder_chain[int(math.log2(self.k))][0])
-               
-
+        m.d.comb += [
+            self.output.eq(adder_chain[int(math.log2(self.k))][0]),
+            self.new_output.eq(valid[int(math.log2(self.k))]),
+        ]          
 
         return m
 
@@ -79,4 +85,4 @@ if __name__=="__main__":
     sim.add_sync_process(circuit)
 
     with sim.write_vcd("S-D_ADC_waves.vcd"):
-        sim.run_until(1e-4)
+        sim.run_until(5e-5)
