@@ -1,7 +1,7 @@
 from nmigen import *
 from nmigen.sim import *
 from utility.bram_inst import *
-from nco_lut import *
+from .nco_lut import *
 import math
  
 class NCO_LUT_Pipelined(Elaboratable):
