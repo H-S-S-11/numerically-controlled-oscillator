@@ -4,13 +4,13 @@ from nmigen.sim import *
 import math
 
 class SigmaDelta_ADC(Elaboratable):
-    def __init__(self, k=16):
-        if (k<=1) or (math.ceil(math.log2(k)) != math.log2(k)):
-            raise ValueError("k must be a power of 2 greater than 1")
+    def __init__(self, k=15):
+        if (k<=1):
+            raise ValueError("k must be  greater than 1")
 
         self.comparator = Signal()
         self.feedback = Signal()
-        self.output = Signal( 1 + math.ceil(math.log2(k)) )
+        self.output = Signal( math.ceil(math.log2(k)) )
         self.new_output = Signal()
         
         
@@ -31,7 +31,7 @@ class SigmaDelta_ADC(Elaboratable):
 
         with m.If(counter==0):
             m.d.sync += [
-                accumulator.eq(self.comparator),
+                accumulator.eq(0),
                 self.output.eq(accumulator),
                 self.new_output.eq(1),
             ]
@@ -40,7 +40,7 @@ class SigmaDelta_ADC(Elaboratable):
         return m
 
 if __name__=="__main__":
-    k = 32
+    k = 15
     dut = SigmaDelta_ADC(k=k)
 
     sim = Simulator(dut)
@@ -51,8 +51,8 @@ if __name__=="__main__":
             yield
     
     def circuit():
-        integrator = 0.5
-        input = 0.4
+        integrator = 0.9
+        input = 0.8
         f = 5e4
         t = 0
         yield dut.output.eq(k) # Drive high at the start to set gtkwave range

@@ -14,9 +14,9 @@ from pdm import PDM
 from sigma_delta_adc import SigmaDelta_ADC
 
 class Sigma_delta_test(Elaboratable):
-    def __init__(self, k=16):
+    def __init__(self, k=15):
         self.k = k
-        self.pwm_resolution = 1 + math.ceil(math.log2(k))
+        self.pwm_resolution = math.ceil(math.log2(k))
 
         self.pwm_o = Signal()
             
