@@ -12,6 +12,7 @@ from nco_lut import *
 from pwm import PWM
 from pdm import PDM
 from sigma_delta_adc import SigmaDelta_ADC
+from fir_pipelined import FIR_Pipelined
 
 class Sigma_delta_test(Elaboratable):
     def __init__(self, k=15):
@@ -25,6 +26,8 @@ class Sigma_delta_test(Elaboratable):
 
         m.submodules.pwm = self.pwm = pwm = PWM(resolution = self.pwm_resolution)
         m.submodules.adc = self.adc = adc = SigmaDelta_ADC(k=self.k)
+        m.submodules.lpf = self.lpf = lpf = FIR_Pipelined(width=self.pwm_resolution+1, cutoff=20e3/100e6
+            )
 
         
     
@@ -57,7 +60,9 @@ class Sigma_delta_test(Elaboratable):
         m.d.comb += [
             adc.comparator.eq(comparator.i),
             feedback.o.eq(adc.feedback),
-            pwm.input_value_i.eq(adc.output),
+            lpf.input_ready_i.eq(1),
+            lpf.input.eq(adc.output),
+            pwm.input_value_i.eq(lpf.output[0:self.pwm_resolution]),
             pwm.write_enable_i.eq(0),
             self.pwm_o.o.eq(pwm.pwm_o),    
         ]       
