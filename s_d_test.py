@@ -14,10 +14,13 @@ from pdm import PDM
 from sigma_delta_adc import SigmaDelta_ADC
 from fir_pipelined import FIR_Pipelined
 
+from luna.gateware.interface.uart import UARTTransmitter
+
+
 class Sigma_delta_test(Elaboratable):
     def __init__(self, k=15):
         self.k = k
-        self.pwm_resolution = math.ceil(math.log2(k))
+        self.pwm_resolution = math.ceil(math.log2(k)) #4
 
         self.pwm_o = Signal()
             
@@ -26,8 +29,8 @@ class Sigma_delta_test(Elaboratable):
 
         m.submodules.pwm = self.pwm = pwm = PWM(resolution = self.pwm_resolution)
         m.submodules.adc = self.adc = adc = SigmaDelta_ADC(k=self.k)
-        m.submodules.lpf = self.lpf = lpf = FIR_Pipelined(width=self.pwm_resolution+1, cutoff=20e3/100e6
-            )
+        m.submodules.lpf = self.lpf = lpf = FIR_Pipelined(width=self.pwm_resolution+1,
+            cutoff=1e3/100e6, taps=32)
 
         
     
@@ -45,26 +48,36 @@ class Sigma_delta_test(Elaboratable):
                     DiffPairs("48", "46", conn=("gpio", 1), dir="i"),
                     Attrs(IOSTANDARD="LVDS_25")
                 ),
+                Resource("uart_tx", 0,
+                    Pins("28", conn=("gpio", 0), dir ="o" ), 
+                    Attrs(IOSTANDARD="LVCMOS33")
+                ),
             ])
             self.pwm_o = platform.request("pwm")
             feedback = platform.request("feedback")
             comparator = platform.request("comparator")
 
-        # compare_out = Signal()
-        # m.submodules.comparator_bufds = Instance("IBUFDS",
-        #     i_I = comparator.p,
-        #     i_IB= comparator.n,
-        #     o_O = compare_out,
-        # )
-
+        uart_tx = platform.request("uart_tx")
+        uart_divisor = int(100e6/9600)
+        m.submodules.uart = uart = UARTTransmitter(divisor=uart_divisor)
+    
         m.d.comb += [
             adc.comparator.eq(comparator.i),
             feedback.o.eq(adc.feedback),
             lpf.input_ready_i.eq(1),
-            lpf.input.eq(adc.output),
-            pwm.input_value_i.eq(lpf.output[0:self.pwm_resolution]),
+            lpf.input.eq(adc.output << 1),
+            pwm.input_value_i.eq(lpf.output[0:self.pwm_resolution+1]),
             pwm.write_enable_i.eq(0),
-            self.pwm_o.o.eq(pwm.pwm_o),    
+            self.pwm_o.o.eq(pwm.pwm_o), 
+
+            uart.stream.valid.eq(Const(1)),
+            uart.stream.first.eq(Const(1)),
+            uart.stream.last .eq(Const(1)),
+            # Use this one with four bit output to give single hex digit
+            uart.stream.payload.eq(lpf.output[0:self.pwm_resolution+1] + \
+                Mux(lpf.output[3] &  (lpf.output[2] | lpf.output[1]), 55, 48) ),
+            #uart.stream.payload.eq(lpf.output[0:self.pwm_resolution+1] + 32),
+            uart_tx.o.eq(uart.tx),
         ]       
 
 
