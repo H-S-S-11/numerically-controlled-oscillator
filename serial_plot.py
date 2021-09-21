@@ -16,7 +16,7 @@ try:
         try:
             line = esp.readline()
             esp_value. append( int(str(line)[2:-5]) )
-            fpga_value.append( int(str(ser.read())[2], 16) )
+            fpga_value.append( ord(str(ser.read())[2]) - 32 )
 
         except ValueError:
             pass
@@ -32,16 +32,21 @@ x = np.arange(len(fpga_value))
 fpga_value = np.array(fpga_value)
 esp_value  = np.array(esp_value )
 
-esp_value = esp_value * 15/1024
+
 
 sos = signal.ellip(21, 0.009, 80, 0.01, output='sos')
 filtered = sosfilt(sos, fpga_value)
 
+k = 63
+esp_value = esp_value * k/1024
+
 plt.plot(x, fpga_value)
 plt.plot(x, esp_value)
+plt.ylim(0, k+1)
+
 plt.figure()
 
 plt.plot(x, filtered)
 plt.plot(x, esp_value)
-plt.ylim(0, 16)
+plt.ylim(0, k+1)
 plt.show()

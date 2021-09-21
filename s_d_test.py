@@ -20,23 +20,23 @@ from luna.gateware.interface.uart import UARTTransmitter
 class Sigma_delta_test(Elaboratable):
     def __init__(self, k=15):
         self.k = k
-        self.pwm_resolution = math.ceil(math.log2(k)) #4
+        self.pdm_resolution = math.ceil(math.log2(k))
 
-        self.pwm_o = Signal()
+        self.pdm_o = Signal()
             
     def elaborate(self, platform):
         m = Module()
 
-        m.submodules.pwm = self.pwm = pwm = PWM(resolution = self.pwm_resolution)
+        m.submodules.pdm = self.pdm = pdm = PDM(resolution = self.pdm_resolution)
         m.submodules.adc = self.adc = adc = SigmaDelta_ADC(k=self.k)
-        m.submodules.lpf = self.lpf = lpf = FIR_Pipelined(width=self.pwm_resolution+1,
+        m.submodules.lpf = self.lpf = lpf = FIR_Pipelined(width=self.pdm_resolution+1,
             cutoff=1e3/100e6, taps=32)
 
         
     
         if(platform != None):
             platform.add_resources([
-                Resource("pwm", 0,
+                Resource("pdm", 0,
                     Pins("48", conn=("gpio", 0), dir ="o" ), 
                     Attrs(IOSTANDARD="LVCMOS33")
                 ),
@@ -53,7 +53,7 @@ class Sigma_delta_test(Elaboratable):
                     Attrs(IOSTANDARD="LVCMOS33")
                 ),
             ])
-            self.pwm_o = platform.request("pwm")
+            self.pdm_o = platform.request("pdm")
             feedback = platform.request("feedback")
             comparator = platform.request("comparator")
 
@@ -66,17 +66,17 @@ class Sigma_delta_test(Elaboratable):
             feedback.o.eq(adc.feedback),
             lpf.input_ready_i.eq(1),
             lpf.input.eq(adc.output << 1),
-            pwm.input_value_i.eq(lpf.output[0:self.pwm_resolution+1]),
-            pwm.write_enable_i.eq(0),
-            self.pwm_o.o.eq(pwm.pwm_o), 
+            pdm.input.eq(lpf.output[0:self.pdm_resolution+1]),
+            pdm.write_en.eq(0),
+            self.pdm_o.o.eq(pdm.pdm_out), 
 
             uart.stream.valid.eq(Const(1)),
             uart.stream.first.eq(Const(1)),
             uart.stream.last .eq(Const(1)),
             # Use this one with four bit output to give single hex digit
-            uart.stream.payload.eq(lpf.output[0:self.pwm_resolution+1] + \
-                Mux(lpf.output[3] &  (lpf.output[2] | lpf.output[1]), 55, 48) ),
-            #uart.stream.payload.eq(lpf.output[0:self.pwm_resolution+1] + 32),
+            #uart.stream.payload.eq(lpf.output[0:self.pdm_resolution+1] + \
+            #    Mux(lpf.output[3] &  (lpf.output[2] | lpf.output[1]), 55, 48) ),
+            uart.stream.payload.eq(lpf.output[0:self.pdm_resolution+1] + 32),
             uart_tx.o.eq(uart.tx),
         ]       
 
@@ -85,7 +85,7 @@ class Sigma_delta_test(Elaboratable):
 
 if __name__ == "__main__":
   
-    adc = Sigma_delta_test(k=16)
+    adc = Sigma_delta_test(k=64)
     
     ML505Platform().build(adc, do_program=False)
    
